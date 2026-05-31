@@ -5,6 +5,7 @@ import * as api from '../services/api';
 // 三套 Key 的固定 base URL
 export const FIXED_ZHENZHEN_BASE = 'https://ai.t8star.org';
 export const RH_BASE = 'https://www.runninghub.cn';
+export const DEFAULT_SUB2API_BASE = 'https://9233234.xyz';
 
 interface ApiKeysState {
   settings: ApiSettings;
@@ -23,6 +24,8 @@ const DEFAULT: ApiSettings = {
   rhBaseUrl: RH_BASE,
   llmApiKey: '',
   llmBaseUrl: FIXED_ZHENZHEN_BASE,
+  sub2apiApiKey: '',
+  sub2apiBaseUrl: DEFAULT_SUB2API_BASE,
   // 分类独立 Key（留空时 fallback 到 zhenzhenApiKey）
   gptImageApiKey: '',
   nanoBananaApiKey: '',

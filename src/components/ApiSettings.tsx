@@ -15,6 +15,7 @@ type KeyField =
   | 'zhenzhenApiKey'
   | 'rhApiKey'
   | 'llmApiKey'
+  | 'sub2apiApiKey'
   | 'gptImageApiKey'
   | 'nanoBananaApiKey'
   | 'mjApiKey'
@@ -34,6 +35,7 @@ const COMMON_KEYS: KeySpec[] = [
   { field: 'zhenzhenApiKey', label: '贞贞工坊 API Key', desc: '· 通用后备 · 用于图像/视频/音频生成', bullet: 'bg-amber-400' },
   { field: 'rhApiKey', label: 'RunningHub API Key', desc: '· RunningHub 节点与 RH 钱包应用节点共用', bullet: 'bg-cyan-400' },
   { field: 'llmApiKey', label: 'LLM 独立 API Key', desc: '· 额度隔离 · 用于 LLM/Vision', bullet: 'bg-emerald-400' },
+  { field: 'sub2apiApiKey', label: 'SUB2API 中转 API Key', desc: '· 用于 SUB2API LLM / GPT Image 生图', bullet: 'bg-sky-400' },
 ];
 
 const CLASSIFIED_KEYS: KeySpec[] = [
@@ -53,11 +55,13 @@ const ALL_FIELDS: KeyField[] = [
 
 const emptyMap = (): Record<KeyField, string> => ({
   zhenzhenApiKey: '', rhApiKey: '', llmApiKey: '',
+  sub2apiApiKey: '',
   gptImageApiKey: '', nanoBananaApiKey: '', mjApiKey: '', veoApiKey: '',
   grokApiKey: '', seedanceApiKey: '', sunoApiKey: '',
 });
 const emptyShow = (): Record<KeyField, boolean> => ({
   zhenzhenApiKey: false, rhApiKey: false, llmApiKey: false,
+  sub2apiApiKey: false,
   gptImageApiKey: false, nanoBananaApiKey: false, mjApiKey: false, veoApiKey: false,
   grokApiKey: false, seedanceApiKey: false, sunoApiKey: false,
 });
@@ -81,6 +85,7 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
   const [themeTemplatePathInput, setThemeTemplatePathInput] = useState<string>('');
   // 本地 Eagle API 地址
   const [eagleApiBaseInput, setEagleApiBaseInput] = useState<string>('');
+  const [sub2apiBaseUrlInput, setSub2apiBaseUrlInput] = useState<string>('');
   // 分类独立 Key 区块折叠状态（新手友好：默认折叠，点击展开）
   const [classifiedOpen, setClassifiedOpen] = useState(false);
   // 眼睛预览拉取的明文（仅缓存，不提交）
@@ -104,6 +109,7 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
       setResourceLibraryPathInput((settings as any)?.resourceLibraryPath || '');
       setThemeTemplatePathInput((settings as any)?.themeTemplatePath || '');
       setEagleApiBaseInput((settings as any)?.eagleApiBase || '');
+      setSub2apiBaseUrlInput((settings as any)?.sub2apiBaseUrl || 'https://9233234.xyz');
     }
   }, [open, settings]);
 
@@ -167,6 +173,11 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
     const oldEagleApiBase = (settings as any)?.eagleApiBase || '';
     if (newEagleApiBase && newEagleApiBase !== oldEagleApiBase) {
       (patch as any).eagleApiBase = newEagleApiBase;
+    }
+    const newSub2apiBaseUrl = (sub2apiBaseUrlInput || '').trim().replace(/\/+$/, '');
+    const oldSub2apiBaseUrl = ((settings as any)?.sub2apiBaseUrl || '').replace(/\/+$/, '');
+    if (newSub2apiBaseUrl && newSub2apiBaseUrl !== oldSub2apiBaseUrl) {
+      (patch as any).sub2apiBaseUrl = newSub2apiBaseUrl;
     }
     if (Object.keys(patch).length === 0) {
       onClose();
@@ -378,6 +389,23 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
           {renderKey(COMMON_KEYS[0], { baseUrlNote: `Base URL 锁定: ${FIXED_ZHENZHEN_BASE}` })}
           {renderKey(COMMON_KEYS[1], { baseUrlNote: `Base URL: ${RH_BASE}` })}
           {renderKey(COMMON_KEYS[2], { baseUrlNote: `Base URL 锁定: ${FIXED_ZHENZHEN_BASE} (与贞贞同地址, Key 独立)` })}
+          {renderKey(COMMON_KEYS[3], { baseUrlNote: 'Base URL 可自定义, 用于 SUB2API LLM / GPT Image' })}
+
+          <div className="space-y-2">
+            <label className={`text-sm font-medium flex items-center gap-2 flex-wrap ${labelCls}`}>
+              <span className="w-2 h-2 rounded-full bg-sky-400" />
+              SUB2API Base URL
+              <span className={`text-[11px] font-normal ${hintCls}`}>用于 /v1/chat/completions 与 /v1/images/*</span>
+            </label>
+            <input
+              type="text"
+              value={sub2apiBaseUrlInput}
+              onChange={(e) => setSub2apiBaseUrlInput(e.target.value)}
+              placeholder="https://9233234.xyz"
+              className={inputCls}
+              autoComplete="off"
+            />
+          </div>
 
           {/* 分类独立 Key（默认折叠，点击展开 —— 新手友好） */}
           <div className={`pt-3 border-t ${isPixel ? 'border-[var(--px-ink)]/30' : isDark ? 'border-white/10' : 'border-black/10'}`}>

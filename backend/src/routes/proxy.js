@@ -144,6 +144,173 @@ function recallTaskKey(taskId) {
   return taskId ? taskKeyMap.get(String(taskId)) : null;
 }
 
+function normalizeBaseUrl(value, fallback) {
+  const raw = String(value || fallback || '').trim().replace(/\/+$/, '');
+  return raw || fallback;
+}
+
+function getSub2apiConfig(settings) {
+  return {
+    baseUrl: normalizeBaseUrl(settings?.sub2apiBaseUrl || process.env.SUB2API_BASE_URL, 'https://9233234.xyz'),
+    apiKey: settings?.sub2apiApiKey || process.env.SUB2API_API_KEY || '',
+  };
+}
+
+function fetchWithTimeout(url, init = {}, timeoutMs = 180000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+function normalizeSub2apiImageSize(size, aspectRatio) {
+  const explicit = String(size || '').trim();
+  const ar = String(aspectRatio || '').trim();
+  const level = explicit.toLowerCase();
+  if (['1k', '2k', '4k'].includes(level)) {
+    return aspectToGptSize(ar, level);
+  }
+  const aspectSize = (() => {
+    if (['16:9', '4:3', '3:2', '5:4', '21:9', '4:1', '8:1'].includes(ar)) return '1536x1024';
+    if (['9:16', '3:4', '2:3', '4:5', '1:4', '1:8'].includes(ar)) return '1024x1536';
+    return '1024x1024';
+  })();
+  if (!explicit || explicit === 'auto') return aspectSize;
+  if (/^\d+x\d+$/i.test(explicit)) return explicit;
+  return aspectSize;
+}
+
+async function compactPromptForSub2api({ baseUrl, apiKey, prompt }) {
+  const raw = String(prompt || '').trim();
+  if (raw.length <= 520) return raw;
+  const fallback = compactPromptLocally(raw);
+  if (raw.length > 640) return fallback;
+  const payload = {
+    model: 'gpt-5.4-mini',
+    messages: [
+      {
+        role: 'system',
+        content: '你是图像生成提示词压缩器。保留画面内容、构图、风格、分镜格数、中文标签要求、关键道具和连续性约束。输出一段适合 gpt-image 生图的中文提示词，不解释。',
+      },
+      {
+        role: 'user',
+        content: `把下面提示词压缩到 260 字以内，去掉重复说明，但保留格数、风格、中文标签、关键道具和主要事件。只输出压缩后的生图提示词：\n\n${raw}`,
+      },
+    ],
+    temperature: 0.2,
+    max_tokens: 700,
+    stream: false,
+  };
+  try {
+    const r = await fetchWithTimeout(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload),
+    }, 45000);
+    const data = await r.json().catch(() => null);
+    const text = data?.choices?.[0]?.message?.content;
+    if (r.ok && typeof text === 'string' && text.trim()) return String(text).trim().slice(0, 320);
+  } catch (e) {
+    console.warn('SUB2API prompt compact failed, fallback to clipped prompt:', e?.message || e);
+  }
+  return fallback;
+}
+
+function compactPromptLocally(raw) {
+  const text = String(raw || '')
+    .replace(/\s+/g, ' ')
+    .replace(/非最终美术、?/g, '')
+    .replace(/导演审查用、?/g, '')
+    .replace(/不作为人物\/场景\/道具资产参考。?/g, '')
+    .trim();
+  if (/分镜|格/.test(text) && /婚纱|别针|手机|化妆/.test(text)) {
+    return '8格漫画分镜板，真人短剧质感，低饱和电影色，横向排版。主题：婚前化妆间审查。每格有中文短标签、编号、箭头、红圈、局部放大。关键道具：白婚纱、两枚银别针、黑手机、冷白化妆灯、暖金门缝光。画面表现：站直不退、腰侧别针、助理退场、手机亮屏、门缝暖光、回看确认、功能人员弱化、尾帧接走廊。非海报，非精修概念图。';
+  }
+  const sentences = text.split(/(?<=[。；;.!?？])|\n+/).map((s) => s.trim()).filter(Boolean);
+  const keep = [];
+  for (const sentence of sentences) {
+    if (
+      keep.length < 2 ||
+      /8|八|格|分镜|婚纱|别针|手机|化妆灯|门缝|审查|标签|镜头|声音|走廊|林晓|林欣/.test(sentence)
+    ) {
+      keep.push(sentence);
+    }
+    const joined = keep.join(' ');
+    if (joined.length >= 260) break;
+  }
+  const compact = keep.join(' ').slice(0, 300);
+  return compact || text.slice(0, 300);
+}
+
+function collectResponsesImageItems(data) {
+  const found = [];
+  const visit = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (
+      (value.type === 'image_generation_call' || value.type === 'output_image') &&
+      (value.result || value.b64_json || value.image_base64)
+    ) {
+      found.push(value);
+    }
+    for (const child of Object.values(value)) visit(child);
+  };
+  visit(data?.output);
+  return found;
+}
+
+function parseSseResponsesImageItems(text) {
+  const items = [];
+  const events = String(text || '').split(/\n\n+/);
+  for (const event of events) {
+    const dataLines = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter((line) => line && line !== '[DONE]');
+    if (!dataLines.length) continue;
+    const payload = dataLines.join('\n');
+    let data;
+    try { data = JSON.parse(payload); } catch { continue; }
+    items.push(...collectResponsesImageItems(data));
+    if (data?.type === 'response.image_generation_call.completed' && data?.item) {
+      items.push(data.item);
+    }
+    if (data?.type === 'response.output_item.done' && data?.item) {
+      items.push(data.item);
+    }
+    if (data?.type === 'response.completed' && data?.response) {
+      items.push(...collectResponsesImageItems(data.response));
+    }
+  }
+  return items;
+}
+
+async function saveSub2apiImageItems(items) {
+  const urls = [];
+  for (const item of items) {
+    if (item?.url) urls.push(await saveRemoteImage(item.url));
+    else if (item?.b64_json || item?.result || item?.image_base64) {
+      const saved = saveBase64Image(item.b64_json || item.result || item.image_base64);
+      if (saved) urls.push(saved);
+    } else if (typeof item === 'string' && item.startsWith('data:image/')) {
+      const saved = await saveImageDataUrl(item);
+      if (saved) urls.push(saved);
+    }
+  }
+  return urls;
+}
+
+async function refToInputImage(ref) {
+  if (typeof ref !== 'string' || !ref) return null;
+  if (ref.startsWith('data:image/')) return ref;
+  const conv = await refToBuffer(ref);
+  if (!conv) return null;
+  return `data:${conv.mime};base64,${conv.buf.toString('base64')}`;
+}
+
 // ========== 工具:保存上游返回的图像到本地 ==========
 async function saveRemoteImage(url) {
   try {
@@ -159,6 +326,17 @@ async function saveRemoteImage(url) {
     console.error('⚠ 转存图像失败:', e.message);
     return url; // 退化:返回原 URL
   }
+}
+
+async function saveImageDataUrl(dataUrl) {
+  const m = String(dataUrl || '').match(/^data:image\/([a-z0-9+.-]+);base64,(.+)$/i);
+  if (!m) return null;
+  const ext = safeOutputExt(m[1].replace('jpeg', 'jpg'), 'png');
+  const buf = Buffer.from(m[2], 'base64');
+  const filename = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+  const filePath = path.join(config.OUTPUT_DIR, filename);
+  fs.writeFileSync(filePath, buf);
+  return `/files/output/${filename}`;
 }
 
 // ========== 工具:保存上游返回的音频到本地 ==========
@@ -400,6 +578,180 @@ async function normalizeImageResponse(data) {
   if (taskId) return { kind: 'async', taskId };
   return { kind: 'unknown' };
 }
+
+// ========== POST /api/proxy/sub2api/image — OpenAI-compatible image generation/edit ==========
+// body: { model, prompt, size?, aspectRatio?, quality?, n?, images?[] }
+router.post('/sub2api/image', async (req, res) => {
+  const settings = loadRawSettings();
+  const { baseUrl, apiKey } = getSub2apiConfig(settings);
+  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 SUB2API API Key' });
+
+  const { model, prompt, size, aspectRatio, quality, n, images, compactPrompt, mode, outputFormat, background, compression } = req.body || {};
+  if (!model) return res.status(400).json({ success: false, error: 'model 必填' });
+  if (!prompt) return res.status(400).json({ success: false, error: 'prompt 必填' });
+  const refs = Array.isArray(images) ? images.filter(Boolean).slice(0, 5) : [];
+  const finalSize = normalizeSub2apiImageSize(size, aspectRatio);
+  const requestedN = Math.max(1, Math.min(4, Number(n) || 1));
+
+  const buildImageRequest = async (finalPrompt) => {
+    let upstreamUrl = `${baseUrl}/v1/images/generations`;
+    let init;
+    if (refs.length > 0) {
+      const form = new FormData();
+      form.append('model', model);
+      form.append('prompt', finalPrompt);
+      form.append('size', finalSize);
+      if (quality && quality !== 'auto') form.append('quality', quality);
+      form.append('n', String(requestedN));
+      for (let i = 0; i < refs.length; i++) {
+        const conv = await refToBuffer(refs[i]);
+        if (!conv) continue;
+        const blob = new Blob([conv.buf], { type: conv.mime });
+        form.append('image', blob, `image_${i}.${conv.ext}`);
+      }
+      if (!form.has('image')) return res.status(400).json({ success: false, error: '参考图读取失败' });
+      upstreamUrl = `${baseUrl}/v1/images/edits`;
+      init = { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form };
+    } else {
+      const body = {
+        model,
+        prompt: finalPrompt,
+        n: requestedN,
+        size: finalSize,
+      };
+      if (quality && quality !== 'auto') body.quality = quality;
+      if (outputFormat) body.output_format = String(outputFormat);
+      if (background && background !== 'auto') body.background = String(background);
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+      };
+    }
+    return { upstreamUrl, init };
+  };
+
+  const buildResponsesRequest = async (finalPrompt) => {
+    const tool = {
+      type: 'image_generation',
+      size: finalSize,
+    };
+    if (quality && quality !== 'auto') tool.quality = quality;
+    if (outputFormat) tool.output_format = String(outputFormat);
+    if (background && background !== 'auto') tool.background = String(background);
+    if (compression !== undefined && compression !== null && compression !== '') {
+      tool.output_compression = Math.max(0, Math.min(100, Number(compression) || 0));
+    }
+    const input = [{ role: 'user', content: [{ type: 'input_text', text: finalPrompt }] }];
+    for (const ref of refs) {
+      const imageUrl = await refToInputImage(ref);
+      if (imageUrl) input[0].content.push({ type: 'input_image', image_url: imageUrl });
+    }
+    const payload = {
+      model: 'gpt-5.5',
+      input: refs.length ? input : finalPrompt,
+      tools: [tool],
+      stream: true,
+    };
+    return {
+      upstreamUrl: `${baseUrl}/v1/responses`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(payload),
+      },
+    };
+  };
+
+  const requestViaResponses = async (finalPrompt) => {
+    const { upstreamUrl, init } = await buildResponsesRequest(finalPrompt);
+    const r = await fetchWithTimeout(upstreamUrl, init, 300000);
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch {
+      const urls = await saveSub2apiImageItems(parseSseResponsesImageItems(text));
+      if (urls.length) {
+        return { urls, raw: { stream: true }, via: 'responses-stream' };
+      }
+      throw new Error('SUB2API Responses 响应非 JSON: ' + text.slice(0, 300));
+    }
+    if (!r.ok) {
+      throw new Error(data?.error?.message || data?.message || `SUB2API Responses HTTP ${r.status}`);
+    }
+    const urls = await saveSub2apiImageItems(collectResponsesImageItems(data));
+    if (!urls.length) {
+      throw new Error('SUB2API Responses 未返回图片结果');
+    }
+    return { urls, raw: data, via: 'responses' };
+  };
+
+  try {
+    const preferResponses = mode !== 'images';
+    const shouldCompact = !preferResponses && compactPrompt !== false && String(prompt || '').length > 520;
+    const finalPrompt = shouldCompact
+      ? await compactPromptForSub2api({ baseUrl, apiKey, prompt })
+      : String(prompt || '');
+    if (preferResponses) {
+      const responseResult = await requestViaResponses(finalPrompt);
+      return res.json({ success: true, data: { ...responseResult, model, prompt: finalPrompt, compacted: false } });
+    }
+    const { upstreamUrl, init } = await buildImageRequest(finalPrompt);
+    let r;
+    try {
+      r = await fetchWithTimeout(upstreamUrl, init, 240000);
+    } catch (fetchErr) {
+      if (!refs.length) {
+        const retryPrompt = shouldCompact ? finalPrompt : await compactPromptForSub2api({ baseUrl, apiKey, prompt });
+        const responseResult = await requestViaResponses(retryPrompt);
+        return res.json({ success: true, data: { ...responseResult, model, prompt: retryPrompt, compacted: retryPrompt !== prompt } });
+      }
+      if (!shouldCompact && String(prompt || '').length > 520) {
+        const retryPrompt = await compactPromptForSub2api({ baseUrl, apiKey, prompt });
+        const retryReq = await buildImageRequest(retryPrompt);
+        r = await fetchWithTimeout(retryReq.upstreamUrl, retryReq.init, 240000);
+      } else {
+        throw fetchErr;
+      }
+    }
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch {
+      return res.status(500).json({ success: false, error: 'SUB2API 响应非 JSON: ' + text.slice(0, 300) });
+    }
+    if (!r.ok) {
+      return res.status(r.status).json({
+        success: false,
+        error: data?.error?.message || data?.message || `SUB2API HTTP ${r.status}`,
+        raw: data,
+      });
+    }
+
+    const urls = [];
+    const items = Array.isArray(data?.data) ? data.data : [];
+    for (const item of items) {
+      if (item?.url) urls.push(await saveRemoteImage(item.url));
+      else if (item?.b64_json) {
+        const saved = saveBase64Image(item.b64_json);
+        if (saved) urls.push(saved);
+      } else if (typeof item === 'string' && item.startsWith('data:image/')) {
+        const saved = await saveImageDataUrl(item);
+        if (saved) urls.push(saved);
+      }
+    }
+    if (!urls.length) {
+      if (!refs.length) {
+        const responseResult = await requestViaResponses(finalPrompt);
+        return res.json({ success: true, data: { ...responseResult, model, prompt: finalPrompt, compacted: finalPrompt !== prompt } });
+      }
+      return res.status(500).json({ success: false, error: 'SUB2API 未返回图片 URL 或 b64_json', raw: data });
+    }
+    return res.json({ success: true, data: { urls, raw: data, via: 'images', model, prompt: finalPrompt, compacted: finalPrompt !== prompt } });
+  } catch (e) {
+    console.error('proxy/sub2api/image 错误:', e);
+    const cause = e?.cause?.code ? ` (${e.cause.code})` : '';
+    return res.status(500).json({ success: false, error: `SUB2API 请求失败${cause}: ${e.message || '上游连接中断或超时'}` });
+  }
+});
 
 router.post('/image', async (req, res) => {
   const settings = loadRawSettings();
@@ -983,12 +1335,16 @@ router.post('/mj/upload', async (req, res) => {
 //   - 完全对齐 gpt-image-2-web _doSendChat (index.html L8128~L8305)
 router.post('/llm', async (req, res) => {
   const settings = loadRawSettings();
-  if (!settings?.llmApiKey) {
-    return res.status(400).json({ success: false, error: '未配置 LLM 独立 API Key' });
-  }
   const { model, messages, temperature, max_tokens, stream } = req.body || {};
   if (!model || !messages) {
     return res.status(400).json({ success: false, error: 'model 和 messages 必填' });
+  }
+  const sub2 = getSub2apiConfig(settings);
+  const useSub2api = !!sub2.apiKey && /^gpt-(?:4o|5|image)/i.test(String(model || ''));
+  const llmApiKey = useSub2api ? sub2.apiKey : settings?.llmApiKey;
+  const llmBaseUrl = useSub2api ? sub2.baseUrl : config.ZHENZHEN_BASE_URL;
+  if (!llmApiKey) {
+    return res.status(400).json({ success: false, error: useSub2api ? '未配置 SUB2API API Key' : '未配置 LLM 独立 API Key' });
   }
 
   // 预处理 messages 中的 image_url:将本地 /files/* 路径转成 base64 dataURL,
@@ -1001,7 +1357,7 @@ router.post('/llm', async (req, res) => {
     return res.status(400).json({ success: false, error: e.message || '参考图预处理失败' });
   }
 
-  const upstream = `${config.ZHENZHEN_BASE_URL}/v1/chat/completions`;
+  const upstream = `${llmBaseUrl}/v1/chat/completions`;
   const payload = {
     model,
     messages: normalizedMessages,
@@ -1015,7 +1371,7 @@ router.post('/llm', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.llmApiKey}`,
+        Authorization: `Bearer ${llmApiKey}`,
       },
       body: JSON.stringify(payload),
     });

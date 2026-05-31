@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS = {
   // v1.2.9.16: 取消 rhWalletApiKey —— RH 钱包应用节点与普通 RunningHub 节点统一使用 rhApiKey
   llmApiKey: '',
   llmBaseUrl: config.ZHENZHEN_BASE_URL, // 同贞贞工坊上游
+  sub2apiApiKey: '',
+  sub2apiBaseUrl: process.env.SUB2API_BASE_URL || 'https://9233234.xyz',
   // 分类 Key（留空时 fallback 到 zhenzhenApiKey）
   gptImageApiKey: '',
   nanoBananaApiKey: '',
@@ -147,6 +149,7 @@ router.get('/', (_req, res) => {
     zhenzhenApiKey: maskKey(settings.zhenzhenApiKey),
     rhApiKey: maskKey(settings.rhApiKey),
     llmApiKey: maskKey(settings.llmApiKey),
+    sub2apiApiKey: maskKey(settings.sub2apiApiKey),
   };
   for (const f of CLASSIFIED_KEY_FIELDS) {
     masked[f] = maskKey(settings[f]);

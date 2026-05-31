@@ -6,7 +6,7 @@
 export interface GenerateImageRequest {
   model: string;          // 节点 id (gpt-image-2 / nano-banana-2 / nano-banana-pro)
   apiModel?: string;       // 上游真实模型名(优先使用)
-  paramKind?: 'gpt-size' | 'banana-ratio' | 'mj';
+  paramKind?: 'gpt-size' | 'banana-ratio' | 'mj' | 'sub2api-image';
   prompt: string;
   n?: number;
   // 主参数(双协议通用):
@@ -80,6 +80,32 @@ export async function queryImageStatus(taskId: string, apiModel?: string): Promi
   if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
   // 失败状态下 success=false 但返回 body 中仍包含 status:'failed'
   return data.data || { status: data.success ? 'pending' : 'failed', progress: '0%', error: data?.error };
+}
+
+export interface Sub2apiImageRequest {
+  model: string;
+  prompt: string;
+  size?: string;
+  aspectRatio?: string;
+  quality?: string;
+  n?: number;
+  images?: string[];
+  compactPrompt?: boolean;
+  mode?: 'responses' | 'images';
+  outputFormat?: 'png' | 'jpeg' | 'webp';
+  background?: 'auto' | 'transparent' | 'opaque';
+  compression?: number;
+}
+
+export async function submitSub2apiImage(req: Sub2apiImageRequest): Promise<GenerateImageResult> {
+  const r = await fetch('/api/proxy/sub2api/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  const data = await r.json();
+  if (!r.ok || !data.success) throw new Error(data?.error || `HTTP ${r.status}`);
+  return data.data;
 }
 
 // ========================================================================

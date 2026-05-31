@@ -3,14 +3,15 @@
  * 后续要新增模型只需在对应数组里追加即可
  */
 
-export type ProviderType = 'zhenzhen' | 'llm-direct' | 'runninghub';
+export type ProviderType = 'zhenzhen' | 'llm-direct' | 'runninghub' | 'sub2api';
 
 // ========== 图像 ==========
 // paramKind:决定调用上游时使用哪种参数协议
 //  - 'gpt-size'    : OpenAI 兼容,size 字段为像素串(1024x1024 等),编辑端点 multipart
 //  - 'banana-ratio': nano-banana 协议,使用 aspect_ratio + image_size(1K/2K/4K) + image[]
 //  - 'mj'          : Midjourney 协议,走专属 /api/proxy/mj/* 路由(speed_map + sref/oref)
-export type ImageParamKind = 'gpt-size' | 'banana-ratio' | 'mj';
+//  - 'sub2api-image': OpenAI-compatible images API via user SUB2API relay
+export type ImageParamKind = 'gpt-size' | 'banana-ratio' | 'mj' | 'sub2api-image';
 
 export interface ImageModelDef {
   id: string;             // 节点内部 id(如 'gpt-image-2')
@@ -104,6 +105,27 @@ export const IMAGE_MODELS: ImageModelDef[] = [
     supportsReference: true,
     maxReferenceImages: 5,
     description: '高品质 Pro 版本',
+  },
+  {
+    id: 'sub2api-gpt-image',
+    apiModel: 'gpt-image-2',
+    label: 'SUB2API GPT Image',
+    tabLabel: 'SUB2',
+    provider: 'sub2api',
+    paramKind: 'sub2api-image',
+    capabilities: ['t2i', 'i2i', 'edit', 'text-render'],
+    apiModelOptions: [
+      { value: 'gpt-image-2', label: 'gpt-image-2' },
+      { value: 'gpt-image-1.5', label: 'gpt-image-1.5' },
+      { value: 'gpt-image-1', label: 'gpt-image-1' },
+    ],
+    aspectRatios: ['Auto', '1:1', '16:9', '4:3', '4:5', '3:2', '2:3', '3:4', '5:4', '9:16', '21:9', '1:4', '4:1', '1:8', '8:1'],
+    defaultAspectRatio: '1:1',
+    sizes: ['auto', '1K', '2K', '4K', '1024x1024', '1536x1024', '1024x1536'],
+    defaultSize: 'auto',
+    supportsReference: true,
+    maxReferenceImages: 5,
+    description: '通过你的 SUB2API 中转调用 OpenAI 兼容生图接口',
   },
   // ========================================================================
   // Midjourney — 完全对齐 gpt-image-2-web/index.html runMJ L4437~L4694
@@ -433,6 +455,9 @@ export const LLM_MODELS: LlmModelDef[] = [
   { id: 'gpt-4o', label: 'GPT-4o', provider: 'llm-direct', vision: true, contextLength: 128_000 },
   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', provider: 'llm-direct', vision: true, contextLength: 2_000_000 },
   { id: 'gpt-5', label: 'GPT-5', provider: 'llm-direct', vision: true, contextLength: 200_000 },
+  { id: 'gpt-5.2-chat-latest', label: 'SUB2API · gpt-5.2-chat-latest', provider: 'sub2api', vision: true, contextLength: 200_000 },
+  { id: 'gpt-5.4-mini', label: 'SUB2API · gpt-5.4-mini', provider: 'sub2api', vision: true, contextLength: 200_000 },
+  { id: 'gpt-5.5', label: 'SUB2API · gpt-5.5', provider: 'sub2api', vision: true, contextLength: 200_000 },
   { id: 'gpt-image-2-all', label: 'GPT Image 2 All (图文)', provider: 'llm-direct', vision: true, imageOutput: true, nonStreaming: true, description: '可自动调用图像生成' },
 ];
 

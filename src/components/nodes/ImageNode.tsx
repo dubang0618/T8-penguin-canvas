@@ -26,6 +26,7 @@ import {
   queryImageStatus,
   submitImageFal,
   queryImageFal,
+  submitSub2apiImage,
   uploadFile,
   submitMjImagine,
   queryMjTask,
@@ -84,6 +85,9 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
   const falN: number = d?.falN ?? 1;
   const falFormat: 'png' | 'jpeg' | 'webp' = d?.falFormat || 'png';
   const falSync: boolean = d?.falSync === true;
+  const sub2apiQuality = d?.sub2apiQuality || 'low';
+  const sub2apiFormat: 'png' | 'jpeg' | 'webp' = d?.sub2apiFormat || 'png';
+  const sub2apiBackground: 'auto' | 'transparent' | 'opaque' = d?.sub2apiBackground || 'auto';
   // nbpro-fal: aspect_ratio/resolution/safety/imgMode/webSearch/sysPrompt/seed
   const nbAspect: string = d?.nbAspect || 'auto';
   const nbResolution: string = d?.nbResolution || '2K';
@@ -95,6 +99,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
 
   // ========== MJ 渠道识别及参数(完全对齐 gpt-image-2-web mj_* 控件 L1552~L1580) ==========
   const isMj = modelDef.paramKind === 'mj';
+  const isSub2api = modelDef.paramKind === 'sub2api-image';
   const mjVersion: string = d?.mjVersion || DEFAULT_MJ_VERSION;
   const mjAr: string = d?.mjAr || DEFAULT_MJ_RATIO;
   const mjSpeed: MjSpeed = (d?.mjSpeed as MjSpeed) || DEFAULT_MJ_SPEED;
@@ -348,6 +353,40 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
           }
         }
         throw new Error(`MJ 轮询超时: ${maxPoll} 次 × ${interval / 1000}s`);
+      }
+
+      // ============ SUB2API / OpenAI-compatible image route ============
+      if (isSub2api) {
+        logBus.info(
+          `SUB2API生图: model=${apiModel} size=${sizeLevel} refs=${allRefs.length} prompt="${finalPrompt.slice(0, 60)}${finalPrompt.length > 60 ? '...' : ''}"`,
+          src,
+        );
+        const result = await submitSub2apiImage({
+          model: apiModel,
+          prompt: finalPrompt,
+          size: sizeLevel,
+          aspectRatio,
+          quality: sub2apiQuality,
+          n: d?.sub2apiN || 1,
+          images: allRefs,
+          compactPrompt: d?.sub2apiCompactPrompt !== false,
+          mode: 'responses',
+          outputFormat: sub2apiFormat,
+          background: sub2apiBackground,
+          compression: d?.sub2apiCompression,
+        });
+        const firstUrl = result.urls?.[0];
+        if (!firstUrl) throw new Error('SUB2API 未返回图片');
+        logBus.success(`SUB2API 返回 ${result.urls.length} 张图片 -> ${firstUrl}`, src);
+        update({
+          status: 'success',
+          progress: '100%',
+          imageUrl: firstUrl,
+          imageUrls: result.urls,
+          lastPrompt: finalPrompt,
+          usedI2I: allRefs.length > 0,
+        });
+        return;
       }
 
       // ============ FAL 路径(对齐 gpt-image-2-web runGPTFal / runNanoFal) ============
@@ -616,6 +655,71 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
                 <option key={opt.value} value={opt.value} style={{ background: '#18181b', color: '#ffffff' }}>{opt.label}</option>
               ))}
             </select>
+          </div>
+        )}
+
+        {isSub2api && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-white/50 block mb-1">质量</label>
+                <select
+                  value={sub2apiQuality}
+                  onChange={(e) => update({ sub2apiQuality: e.target.value })}
+                  className="nodrag nopan w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none"
+                >
+                  {['auto', 'low', 'medium', 'high'].map((q) => (
+                    <option key={q} value={q} className="bg-zinc-900">{q}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-white/50 block mb-1">张数</label>
+                <select
+                  value={String(d?.sub2apiN || 1)}
+                  onChange={(e) => update({ sub2apiN: Number(e.target.value) })}
+                  className="nodrag nopan w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none"
+                >
+                  {[1, 2, 3, 4].map((n) => (
+                    <option key={n} value={n} className="bg-zinc-900">{n}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <label className="nodrag nopan flex items-center gap-2 rounded border border-white/10 bg-white/[0.03] px-2 py-1.5 text-[10px] text-white/65">
+              <input
+                type="checkbox"
+                checked={d?.sub2apiCompactPrompt !== false}
+                onChange={(e) => update({ sub2apiCompactPrompt: e.target.checked })}
+              />
+              参考图时长提示词自动精简
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-white/50 block mb-1">格式</label>
+                <select
+                  value={sub2apiFormat}
+                  onChange={(e) => update({ sub2apiFormat: e.target.value })}
+                  className="nodrag nopan w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none"
+                >
+                  {['png', 'jpeg', 'webp'].map((f) => (
+                    <option key={f} value={f} className="bg-zinc-900">{f}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-white/50 block mb-1">背景</label>
+                <select
+                  value={sub2apiBackground}
+                  onChange={(e) => update({ sub2apiBackground: e.target.value })}
+                  className="nodrag nopan w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none"
+                >
+                  {['auto', 'transparent', 'opaque'].map((b) => (
+                    <option key={b} value={b} className="bg-zinc-900">{b}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
 
