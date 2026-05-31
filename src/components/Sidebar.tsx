@@ -58,6 +58,7 @@ const OP_ICON_BY_TYPE: Record<string, string> = {
   relay: 'ArrowRightLeft',
   cinematic: 'Clapperboard',
   'video-motion': 'Sailboat',
+  'pose-master': 'PersonStanding',
 };
 
 const NARUTO_ICON_BY_TYPE: Record<string, string> = {
@@ -87,6 +88,7 @@ const NARUTO_ICON_BY_TYPE: Record<string, string> = {
   'text-split': 'Scissors',
   'image-compare': 'ScanSearch',
   'material-set': 'Package',
+  'pose-master': 'PersonStanding',
 };
 
 const EVA_ICON_BY_TYPE: Record<string, string> = {
@@ -116,6 +118,39 @@ const EVA_ICON_BY_TYPE: Record<string, string> = {
   'text-split': 'Scissors',
   'image-compare': 'ScanSearch',
   'material-set': 'Package',
+  'pose-master': 'PersonStanding',
+};
+
+const YYH_ICON_BY_TYPE: Record<string, string> = {
+  upload: 'FileUp',
+  output: 'MonitorCheck',
+  text: 'ScrollText',
+  image: 'Sparkles',
+  video: 'Clapperboard',
+  seedance: 'Film',
+  audio: 'Radio',
+  llm: 'BrainCircuit',
+  runninghub: 'Network',
+  'runninghub-wallet': 'KeyRound',
+  'rh-tools': 'Boxes',
+  'frame-pair': 'ScanEye',
+  loop: 'Repeat2',
+  'pick-from-set': 'PackageOpen',
+  resize: 'MoveDiagonal',
+  combine: 'Layers3',
+  'grid-crop': 'Grid3x3',
+  idea: 'Lightbulb',
+  bp: 'BookOpen',
+  relay: 'Cable',
+  cinematic: 'Clapperboard',
+  'video-motion': 'Route',
+  'multi-angle-visual': 'Orbit',
+  'text-split': 'Scissors',
+  'image-compare': 'ScanSearch',
+  'material-set': 'Package',
+  'drawing-board': 'PenTool',
+  'portrait-master': 'UserRoundCog',
+  'pose-master': 'PersonStanding',
 };
 
 interface SidebarProps {
@@ -185,6 +220,8 @@ export default function Sidebar({ onAddNode }: SidebarProps) {
         ? NARUTO_ICON_BY_TYPE[n.type] || n.icon
       : visualStyle === 'eva'
         ? EVA_ICON_BY_TYPE[n.type] || n.icon
+      : visualStyle === 'yyh'
+        ? YYH_ICON_BY_TYPE[n.type] || n.icon
         : n.icon;
     const Icon = (Icons as any)[themedIcon] || Icons.Box;
     const colorHex = COLOR_HEX[n.color] || COLOR_HEX.slate;
