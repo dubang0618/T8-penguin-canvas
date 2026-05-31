@@ -41,6 +41,7 @@ import { useThemeStore } from '../../stores/theme';
 import { logBus } from '../../stores/logs';
 import { useDragMaterialStore, type MaterialPayload } from '../../stores/dragMaterial';
 import { useMaterialDropTarget } from '../../hooks/useMaterialDropTarget';
+import { taskCompletionSound } from '../../stores/taskCompletionSound';
 
 /**
  * ImageNode - 图像生成(ZhenzhenMagic)
@@ -254,6 +255,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
       logBus.error('生成中止: 缺少 prompt', src);
       return;
     }
+    taskCompletionSound.primeAudio();
     update({ status: 'generating', progress: '0%', error: null });
     try {
       // collectUpstream 已返回「本地上传 + 上游接入」按用户拖拽顺序合并后的列表,
@@ -350,6 +352,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
               lastPrompt: finalPrompt,
               usedI2I: allRefs.length > 0 || mjSrefImages.length > 0 || mjOrefImages.length > 0,
             });
+            taskCompletionSound.notifyComplete(id, 'image');
             return;
           }
         }
@@ -432,6 +435,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
             lastPrompt: finalPrompt,
             usedI2I: allRefs.length > 0,
           });
+          taskCompletionSound.notifyComplete(id, 'image');
           return;
         }
 
@@ -462,6 +466,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
               lastPrompt: finalPrompt,
               usedI2I: allRefs.length > 0,
             });
+            taskCompletionSound.notifyComplete(id, 'image');
             return;
           }
           if (st === 'failed') {
@@ -504,6 +509,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
           lastPrompt: finalPrompt,
           usedI2I: allRefs.length > 0,
         });
+        taskCompletionSound.notifyComplete(id, 'image');
         return;
       }
 
@@ -538,6 +544,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
             lastPrompt: finalPrompt,
             usedI2I: allRefs.length > 0,
           });
+          taskCompletionSound.notifyComplete(id, 'image');
           return;
         }
         if (st === 'failed' || st === 'failure' || st === 'error') {
@@ -554,7 +561,7 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
   };
 
   // 接入运行总线,供批量运行调起
-  useRunTrigger(id, handleGenerate);
+  useRunTrigger(id, handleGenerate, 'image');
 
   // === 跨节点拖拽: source (从输出图 Ctrl+拖出) ===
   const startDrag = useDragMaterialStore((s) => s.start);

@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
-  "version": "1.7.3",
-  "lastUpdated": "2026-05-31-v1.7.3-sora2-fal-model-hotfix",
+  "version": "1.7.6",
+  "lastUpdated": "2026-05-31-v1.7.6-pose-resource-and-sd2-fixes",
   "packaging": {
     "description": "Electron NSIS 桌面端打包链路(v1.2.1 起标准化, 严禁未明确指令主动打包)。完整产物拓扑: app.asar(electron/{main,loader,preload}.cjs + node_modules) + app.asar.unpacked(node_modules/sharp + @img) + resources/backend-enc/*.t8c(extraResources, asar 外) + resources/frontend(extraResources, asar 外)。前端版本号由 vite define 注入 __APP_VERSION__、Sidebar 左下角自动同步。",
     "scripts": {
@@ -16,9 +16,9 @@
       "T8PC_FRONTEND_DIST": "打包模式 = path.join(process.resourcesPath, 'frontend'); 开发模式 = <project>/dist",
       "T8PC_RES": "打包模式 = process.resourcesPath; 开发模式 = <project>"
     },
-    "version": "1.7.3",
-    "semverVersion": "1.7.3",
-    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.7.3：Sora2 视频节点只保留稳定 sora-2 (FAL) 模型入口，移除日期版模型下拉；历史画布若保存过 sora-2-2025-* 会在前后端自动归一到 sora-2 后提交，避免 FAL 任务失败或 UI 显示 3 个模型。本次未重新打包 Electron。",
+    "version": "1.7.6",
+    "semverVersion": "1.7.6",
+    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.7.6：幽游白书肖像大师隐藏模式新增专用内置音乐 yyh-hidden-tonight.mp3，隐藏模式开启时 ThemeMusicToggle 会自动切换并解除静音，普通幽游白书主题音乐继续使用 yyh-unbalanced-kiss-piano.mp3。本次只推源码和前端资源，不打包 Electron。",
     "installer": "本次未打包 Electron；最近一次安装包为 dist_electron/T8-PenguinCanvas-Setup-1.5.5.exe (NSIS, 108.96 MB)",
     "checklist": [
       "运行 npm run encrypt 前确认已 npm install bytenode 且使用 Electron 内置 Node",
@@ -77,7 +77,8 @@
         "画布背景水印必须放在 .t8-canvas-shell::before/::after 背景层，z-index:0 且 pointer-events:none；ReactFlow 节点、边、浮层和 GroupBox 内容必须盖住水印，不能让装饰穿透到素材预览或画板内容上方",
         "强风格官方主题可为 light/dark 分别提供水印资产；若深色水印包含黑底终端、警告面板或厚重贴片，浅色模式必须改用透明底线稿 / 印章 / HUD 版本，避免浅色画布出现突兀深色块",
         "框选/节点右键菜单、空白右键快速添加菜单、拖线候选菜单和选中节点右上角 RUN/关闭浮动条都属于全局主题控件，必须使用 t8-context-menu / t8-node-action-bar 语义类和 visuals.style 作为视觉判断来源，禁止仅按 legacyStyle=像素/科技分支导致 OP、火影、EVA 等主题残留白底或绿色按钮",
-        "全局菜单新增动作时必须检查 light/dark 与七套官方主题的可读性；小图标和菜单图标仍需固定尺寸，避免 OP/像素风胶囊按钮把资源库、图像对比、批量下载等入口撑大"
+        "全局菜单新增动作时必须检查 light/dark 与七套官方主题的可读性；小图标和菜单图标仍需固定尺寸，避免 OP/像素风胶囊按钮把资源库、图像对比、批量下载等入口撑大",
+        "节点 NodeID 徽标属于 ReactFlow 节点外层通用浮层，必须使用 .t8-node-serial-badge 这类全局样式挂在节点外框右上角；禁止按标题图标宽度硬编码 left/top 塞进标题行，避免不同节点、不同主题和长标题重叠。"
       ],
       "music": {
         "defaultMuted": true,
@@ -97,9 +98,10 @@
           "rh-hidden": "rh-hidden-saya.mp3",
           "naruto-style": "naruto-shinsei-gyakuten.mp3",
           "eva-style": "eva-decisive-battle.mp3",
-          "yyh-style": "yyh-unbalanced-kiss-piano.mp3"
+          "yyh-style": "yyh-unbalanced-kiss-piano.mp3",
+          "yyh-hidden": "yyh-hidden-tonight.mp3"
         },
-        "rule": "主题音乐默认静音，通常只在用户主动点击播放按钮后播放；RH 鸭鸭隐藏模式和幽游白书肖像大师隐藏模式会自动切换隐藏音乐并解除静音。模板编辑器支持上传替换，导出模板可携带 data:audio/*。"
+        "rule": "主题音乐默认静音，通常只在用户主动点击播放按钮后播放；RH 鸭鸭隐藏模式会自动切换 rh-hidden-saya.mp3，幽游白书肖像大师隐藏模式会自动切换 yyh-hidden-tonight.mp3，二者都会解除静音。模板编辑器支持上传替换，导出模板可携带 data:audio/*。"
       }
     },
     "styles": {
@@ -206,7 +208,7 @@
           "nodeFrame": "spirit-case",
           "headerMark": "REI GUN"
         },
-        "music": "yyh-unbalanced-kiss-piano.mp3"
+        "music": "yyh-unbalanced-kiss-piano.mp3；肖像大师隐藏模式自动切换 yyh-hidden-tonight.mp3 并解除静音播放"
       }
     },
     "defaultStyle": "pixel",
@@ -1276,12 +1278,14 @@
       ]
     },
     "phase81": {
-      "label": "跨画布素材发送与 Eagle 入库 (v1.6.2)",
+      "label": "跨画布素材 / 节点发送与 Eagle 入库 (v1.6.2+)",
       "status": "complete",
       "items": [
         "新增 SendMaterialsModal 发送素材弹窗，框选上传素材、输出素材、素材集或从资源库卡片触发时，会汇总图像 / 视频 / 音频 / 文本并显示素材概览。",
+        "选中多个节点发送到其他画布时，新增“节点片段”模式：复制选中节点本体并保留选中节点之间的内部连线，目标画布仍保持原工作流关系；资源库和 Eagle 入口继续只处理图像 / 视频 / 音频 / 文本素材。",
         "发送方式支持智能保持、合并素材集、上传素材、拆成多个上传、输出素材；目标画布支持搜索与明确选中态，底部展示当前选择，发送 / 保存 / Eagle 操作都有忙碌反馈。",
         "Canvas 跨画布写入目标画布 JSON 后刷新画布列表；勾选发送后切换时，会在目标画布加载完成后自动定位到新建素材节点中心，当前画布发送也会聚焦新节点。",
+        "顶部工具条新增任务完成提示音开关，默认开启；仅图像 / 视频 / SD2.0(seedance) / 音频 / LLM 节点成功完成时播放独立轻提示音，和 ThemeMusicToggle 主题音乐通道分开，主题音乐静音不影响提示音，并通过全局 5 秒节流避免批量运行频繁响铃。",
         "同批素材发送写入 sendBridgeSignature / sendBridgeMode / sendBridgeSourceCanvasId；重复向同一画布发送相同素材时会先替换旧批次，旧版无签名但由发送功能创建的同素材节点也会被清理，避免 2 个素材多次累计成 8 个节点。",
         "新增后端 /api/eagle/status 与 /api/eagle/import，本地 Eagle API 只允许 localhost / 127.0.0.1 / ::1，支持本地 input/output 文件、资源库文件、资源库素材集文件与文本临时 txt 入库。",
         "设置页新增 Eagle 本地接口地址，默认 http://127.0.0.1:41595；_post_build.cjs 增加 routes/eagle.t8c 检查，确保 Electron 打包不会漏掉 Eagle 路由。",
@@ -1392,8 +1396,8 @@
         "幽游白书主题下选中肖像大师节点后，长按顶部 RUN 3 秒切换隐藏模式；隐藏模式开启后肖像大师节点、RUN 浮动条、输出节点和相关连线统一进入粉色发光视觉。",
         "隐藏视觉状态与高级词条安全阻断解耦：即使基础人物触发安全屏蔽，节点本体、编辑器、端口和连线仍保持粉色隐藏模式，只是不拼入隐藏高级 prompt。",
         "隐藏高级 prompt 只在幽游白书隐藏模式下拼入输出；若基础人物选择包含少女、少年、学生、校园、童话年轻角色等未成年/年轻化信号，会保守阻断隐藏高级词条输出，只保留公开 prompt。",
-        "ThemeMusicToggle 扩展隐藏音乐通道，幽游白书隐藏模式开启时可自动解除静音并切换隐藏音乐；当前先复用主题音乐通道，等待后续提供专用隐藏曲目。",
-        "已通过 npm run build；本次未打包 Electron，skill.md 未改动。"
+        "ThemeMusicToggle 扩展隐藏音乐通道，幽游白书隐藏模式开启时可自动解除静音并切换到专用隐藏曲目 yyh-hidden-tonight.mp3；普通主题音乐仍使用 yyh-unbalanced-kiss-piano.mp3。",
+        "已通过 npm run build；本阶段未打包 Electron。"
       ]
     },
     "phase92": {
@@ -1490,6 +1494,82 @@
         "前端 VideoNode 会把历史画布里保存的 sora-2-2025-* 自动识别为 Sora2 主模型，避免旧节点因为模型选项被移除而回退到其他视频模型。",
         "后端 /api/proxy/video/fal/submit 会在校验、选路和 payload 组装前把日期版 Sora2 模型名归一为 sora-2；实际仍走 fal-ai/sora-2/text-to-video 或 fal-ai/sora-2/image-to-video，参考图默认 base64。",
         "README、features.json 与版本文件同步到 v1.7.3；skill.md 仅本地记录，不参与 GitHub 推送。"
+      ]
+    },
+    "phase101": {
+      "label": "节点片段发送与任务完成提示音 (v1.7.4)",
+      "status": "complete",
+      "items": [
+        "跨画布发送弹窗新增「节点片段」模式，框选多个节点发送到其他画布时会复制选中节点自身数据，并保留选中节点之间的内部连线关系；素材 / 资源库 / Eagle 发送仍保持原有素材模式。",
+        "节点片段落到目标画布时会重新映射节点和连线 id，保持相对布局并避开目标画布已有节点；发送后切换目标画布和定位新内容继续可用。",
+        "顶部工具栏新增任务完成提示音开关，默认开启并持久化，提示音与主题音乐分离，主题音乐静音时仍可播放。",
+        "提示音只覆盖图像、视频、SD2.0、音频和 LLM 五类核心生成节点，手动点击节点生成和顶部 RUN / 批量运行都在真实成功完成后触发；5 秒内最多响一次，避免连续任务造成干扰。",
+        "主题 CSS 补充 select / option 兜底、幽游白书 select 样式和模型帮助面板样式，保持多主题下表单与帮助浮层可读。"
+      ]
+    },
+    "phase102": {
+      "label": "画布 NodeID 与按 ID 连线/查找 (v1.7.5)",
+      "status": "complete",
+      "items": [
+        "每个画布新增独立递增 NodeID：节点 data.nodeSerialId 从 1 开始分配，同一画布内不重复；删除节点后 nextNodeSerialId 不回退，历史画布加载时会自动补齐缺失或重复编号。",
+        "所有新增节点路径都会走统一编号工具：手动添加、上传、复制粘贴、模板导入、JSON 导入、自动输出节点、框选节点片段发送和跨画布素材发送都会按当前或目标画布的 nextNodeSerialId 重新分配编号。",
+        "节点角标统一显示在 ReactFlow 节点外框右上角，使用 .t8-node-serial-badge 悬浮徽标，不占用节点标题行，避免不同主题或长标题下遮挡节点名称。",
+        "拖线候选菜单顶部新增“发送到ID”，用户输入目标 NodeID 后自动创建兼容连线；无效数字、节点不存在、连接自身、重复连线和端口类型不兼容都会给出失败提示。",
+        "顶部工具栏新增“查找 NodeID”按钮，输入编号后画布自动居中到对应节点并触发节点高亮脉冲，便于大画布快速定位。"
+      ]
+    },
+    "phase103": {
+      "label": "幽游白书肖像大师隐藏音乐 (v1.7.6)",
+      "status": "complete",
+      "items": [
+        "幽游白书主题新增内置隐藏曲目 src/assets/theme-music/yyh-hidden-tonight.mp3，普通主题音乐仍使用 yyh-unbalanced-kiss-piano.mp3。",
+        "defaultTemplates 的 YYH 模板声明 hiddenTitle / hiddenUrl / hiddenVolume，肖像大师隐藏模式触发 yyhPortraitIds 后 ThemeMusicToggle 会自动切换隐藏音乐并解除静音。",
+        "electron/_post_build.cjs 增加 yyh-hidden-tonight-*.mp3 前端资源校验，确保正式打包时不会漏带该隐藏音乐。",
+        "公开版本同步到 1.7.6：package.json、package-lock.json、vite.config.ts/js、electron/main.cjs、backend/src/config.js APP_VERSION、features.json、README.md 同步；skill.md 仅本地更新，继续禁止推送 GitHub。"
+      ]
+    },
+    "phase104": {
+      "label": "姿势大师画布比例与抓取变换 (v1.7.6)",
+      "status": "complete",
+      "items": [
+        "姿势大师左侧画布新增比例控制：支持默认、1:1、4:3、3:4、16:9、9:16、3:2、2:3 和自定义宽高比；画布采用动态 viewBox 并在固定预览区内完整适配显示，避免纵向比例被裁切。",
+        "姿势大师节点数据新增 poseCanvasRatioId、poseCanvasCustomWidth、poseCanvasCustomHeight 和 poseCanvasRatio，当前姿势 JSON、姿势库、关键帧、批量输出、运行 PNG、metadata 与 OpenPose/COCO keypoints 导出都会携带或应用对应画布尺寸。",
+        "抓取模式升级为整个人物变换工具：拖动画布移动人物，S 手柄等比缩放，R 手柄旋转；移动、缩放和旋转都会限制在当前画布边界内，适合多人构图和长画幅姿势调整。",
+        "右侧批量数量与关键帧帧数输入框改为居中数字显示，修复数值贴边导致的视觉不齐。",
+        "验证：npm run build 通过；浏览器实测 9:16、自定义 2:3、S 等比缩放、R 旋转和数量 / 帧数居中样式生效。"
+      ]
+    },
+    "phase105": {
+      "label": "姿势大师比例显示与上游识别热修 (v1.7.6)",
+      "status": "complete",
+      "items": [
+        "修复姿势大师切换 16:9 等比例时外层白色固定容器造成的“画布大小没变”错觉：预览承载区高度现在跟随实际画布比例变化，并用主题面板底色区分画布本体与留白区域。",
+        "MediaPipe 识别结果新增头颈连接约束：头部点会基于鼻子、眼睛、耳朵均值估计，并限制与脖子的最大距离，减少侧躺或构图复杂图片中头和身体完全分离的问题。",
+        "姿势大师新增“识别上游”按钮：左侧 image 输入连接图片后，可直接用第一张上游图识别姿态；识别后继续支持线稿图 / OpenPose图 / COCO图预览和运行输出，本地图片入口改为“本地识别”以区分来源。",
+        "上游图像载入增加跨域兜底：优先 anonymous，失败后自动尝试普通图片载入，提高资源库、上传素材和部分外部图像的识别成功率。"
+      ]
+    },
+    "phase106": {
+      "label": "姿势大师资源库、手部控制与清空背景热修 (v1.7.6)",
+      "status": "complete",
+      "items": [
+        "资源库新增 pose 类型和默认分类：未分类、常用姿势、动作参考、分镜姿势；后端新增 POST /api/resources/poses/add，以 JSON 保存 t8-pose-master 配置。",
+        "姿势大师节点新增“存资源库”入口，会保存当前人物 / 多人物、手部控制、画布比例、自定义 prompt、metadata、来源节点和画布信息；重复姿势配置会走 sha256 去重。",
+        "资源库抽屉新增姿势卡片视觉，点击插入时会恢复为新的姿势大师节点；App 插入逻辑能读取 t8-pose-master-resource 或裸 t8-pose-master 配置并恢复节点数据。",
+        "ResourceKind 扩展为 image / video / audio / set / pose，同时新增 ResourceMediaKind 限定普通媒体保存仍只接受 image / video / audio，避免 pose 被当成可拖拽媒体素材。",
+        "修复清空姿势大师时传入背景无法清空的问题：清空会写入 poseSuppressedReferenceUrl 隐藏当前上游背景但保留连线，用户重新点击“识别上游”即可恢复背景并重新识别。",
+        "修复左右手手型和掌心方向下拉无效：poseHandControls 现在同步进入 prompt、线稿手部绘制、运行输出、收藏、资源库保存和资源库恢复。"
+      ]
+    },
+    "phase107": {
+      "label": "SD2.0 上游音频/视频提交格式热修 (v1.7.6)",
+      "status": "complete",
+      "items": [
+        "修复 SD2.0 节点连接上传音频或视频后提交失败的问题：后端不再把 /files/input、/files/output 或资源库本地 URL 直接作为 reference_audio / reference_video 发送给 Seedance。",
+        "backend/src/routes/proxy.js 的 uploadRefToZhenzhen 升级为图片 / 视频 / 音频统一素材上传入口：本地 URL、资源库 URL、远端 URL 与 dataURL 都会先上传到贞贞 /v1/files，再把返回 URL 写入 Seedance content[]。",
+        "参考 gpt-image-2-web 的 runSeedance 实现补齐 reference_video / reference_audio 上传链路，避免上游返回 Invalid audio/video format；asset-xxx 保持直接透传兼容。",
+        "纯图片生成路径保持原行为，仍复用同一上传函数换取 image_url；新增 mock 路由验证确保最终 Seedance payload 不再包含本地 /files/input/ URL。",
+        "验证：node --check backend/src/routes/proxy.js、npm run build 通过；开发后端已重启到新逻辑。"
       ]
     }
   },

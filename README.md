@@ -10,13 +10,13 @@ https://www.runninghub.cn/?inviteCode=rh-v1121
 My favorite girl Go YounJung
 # 🐧 贞贞的无限画布（企鹅共创版） · T8-penguin-canvas
 
-> AI 节点画布工作流工具 · Web + Electron 桌面端｜v1.7.3
+> AI 节点画布工作流工具 · Web + Electron 桌面端｜v1.7.6
 >
 > GitHub：<https://github.com/T8mars/T8-penguin-canvas>
 
 一个面向 AI 创作的 **节点式画布**：拖拽节点、连线编排、生成图像 / 视频 / 音频、调用 LLM、串接 RunningHub 工作流，叠加批量执行、智能对齐、打组、主题模板与终端日志。Web 浏览器即可使用，亦可一键打包为 Windows 桌面端（NSIS 安装包）。
 
-![status](https://img.shields.io/badge/version-v1.7.3-brightgreen) ![node](https://img.shields.io/badge/node-%E2%89%A518-blue) ![react](https://img.shields.io/badge/react-19-61dafb) ![electron](https://img.shields.io/badge/electron-33-47848f) ![license](https://img.shields.io/badge/license-MIT-yellow)
+![status](https://img.shields.io/badge/version-v1.7.6-brightgreen) ![node](https://img.shields.io/badge/node-%E2%89%A518-blue) ![react](https://img.shields.io/badge/react-19-61dafb) ![electron](https://img.shields.io/badge/electron-33-47848f) ![license](https://img.shields.io/badge/license-MIT-yellow)
 
 ---
 
@@ -38,7 +38,9 @@ My favorite girl Go YounJung
 - 🎨 **40 个节点**，覆盖文本 / 图像 / 视频 / 音频 / LLM / RunningHub / 工具 / 辅助 / 工具箱 / 输出预览 / 上传素材 / 素材集
 - 🧺 **画布级批量导入 + 素材合集打散**：上传节点支持一次选择多张图 / 多个视频 / 多段音频；也可直接把剪贴板或文件拖到画布，同类型多素材自动形成合集，上传和输出合集都可一键打散为多个独立素材节点
 - 🗂️ **素材集节点 + 资源库整套复用**：可把同类型文本 / 图像 / 视频 / 音频合并为素材集，支持拖拽排序、反转 / 文件名 / 随机排序、导入素材集 / 导出素材集、保存到资源库、从资源库整套插入画布；未选中节点时按 `R` 可快速打开 / 关闭资源库
-- 🚚 **跨画布素材发送 + Eagle 本地入库**：框选上传素材、输出素材或素材集后可发送到其他画布，支持智能保持 / 合并素材集 / 上传素材 / 拆分上传 / 输出素材；发送弹窗提供最近画布、发送历史和重复素材提示，发送后可自动切换并定位到新节点，同批素材重复发送会替换旧批次，资源库素材也可一键发送，Eagle 入库仅允许本机 localhost 接口
+- 🚚 **跨画布节点 / 素材发送 + Eagle 本地入库**：框选多个带连线节点可用“节点片段”发送到其他画布并保留内部连线；上传素材、输出素材或素材集仍支持智能保持 / 合并素材集 / 上传素材 / 拆分上传 / 输出素材，发送弹窗提供最近画布、发送历史和重复素材提示，发送后可自动切换并定位到新内容，资源库素材也可一键发送，Eagle 入库仅允许本机 localhost 接口
+- 🔢 **画布 NodeID 快速连线 / 查找**：每个画布内节点都会显示独立递增的 `NodeID`，删除不回退；拖线菜单顶部可用“发送到ID”输入编号自动连线，顶部工具栏可按 ID 查找并居中定位节点，复制 / 发送 / 导入到其他画布时按目标画布继续编号
+- 🔔 **任务完成提示音**：顶部工具条可独立开关，默认开启；图像 / 视频 / SD2.0 / 音频 / LLM 任务成功完成后播放轻提示音，5 秒内最多响一次，和主题音乐通道分开，主题音乐静音时仍可提示
 - 📁 **跨平台本地路径默认值**：Windows 继续默认 `D:\zhenzhen`，macOS / Linux 默认 `~/zhenzhen`；旧版非 Windows 配置若仍是硬编码默认值会自动迁移，自定义路径不会被覆盖
 - 🏷️ **生成提示词 @ 素材提及**：图像 / 视频 / SD2.0 / 音频 / LLM / RunningHub / RH 钱包应用 / RH 超市文本参数可输入 `@` 选择当前上游素材，输入框内显示小预览图，提交时稳定解析为 `@image1` / `@video1` / `@audio1`
 - 🧩 **xyflow 12** 画布引擎：缩放、平移、连线、迷你地图、控制条、SPA 兜底
@@ -59,7 +61,7 @@ My favorite girl Go YounJung
 - 🖱️ **右键画布快速添加节点**：菜单列出 7 个高频节点（upload / text / image / video / seedance / audio / llm）
 - 🎯 **框选自动菜单**：≥2 节点框选后自动弹出操作面板（组执行 / 复制 / 快复制 / 删除 / 打组）
 - ⏪ **Undo / Redo / 复制粘贴 / 导入导出 / 工作流模板** 完整画布交互
-- 🌗 **主题模板系统**：科技风 / 像素糖果风 / OP 风格 / RH 风格 / 火影忍者风格 / EVA 风格 / 幽游白书风格七套内置模板，支持浅色 / 深色、导入导出、编辑保存、自定义路径与默认静音主题音乐；幽游白书风格已为浅色 / 深色分别使用独立水印，避免浅色画布出现沉重深色贴片
+- 🌗 **主题模板系统**：科技风 / 像素糖果风 / OP 风格 / RH 风格 / 火影忍者风格 / EVA 风格 / 幽游白书风格七套内置模板，支持浅色 / 深色、导入导出、编辑保存、自定义路径与默认静音主题音乐；幽游白书风格已为浅色 / 深色分别使用独立水印，肖像大师隐藏模式会自动切换专用隐藏音乐
 - 🧭 **主题悬浮控件统一**：小图标按钮使用固定语义类，避免 OP / 像素等强风格按钮膨胀；火影小地图、控制条和音乐按钮对齐到与 RH 一致的底部悬浮体验
 - 🎭 **公开主题设计规范**：见 [`docs/theme-design-guide.md`](docs/theme-design-guide.md)，用户可按规范制作、导入和分享更好看的主题画布
 - 🖥️ **终端日志面板**：底部抽屉式实时日志，对齐主项目 logBus 协议
@@ -135,7 +137,7 @@ npm run dist
 | 层 | 技术 |
 |---|---|
 | 前端框架 | React 19 · TypeScript 5 · Vite 6 |
-| 样式 | Tailwind CSS 3 · CSS Modules · 主题模板（科技风 / 像素糖果风 / OP 风格 / RH 风格 / 火影忍者风格 / EVA 风格） |
+| 样式 | Tailwind CSS 3 · CSS Modules · 主题模板（科技风 / 像素糖果风 / OP 风格 / RH 风格 / 火影忍者风格 / EVA 风格 / 幽游白书风格） |
 | 画布引擎 | @xyflow/react 12 · zustand 5 · lucide-react |
 | 后端 | Node.js · Express · sharp（图像处理） · multer（上传） |
 | 桌面端 | Electron 33 · electron-builder 25 · bytenode 1.5 · T8ENC1（自研 AES-256-CBC 二次加密） |
