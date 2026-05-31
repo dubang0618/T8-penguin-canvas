@@ -73,9 +73,14 @@ app.use('/api/themes', themesRouter);
 app.use('/api/eagle', eagleRouter);
 app.use('/pay', rechargeRouter.payRouter);
 
-// ========== 前端静态资源(仅打包模式) ==========
-// 开发模式下不启用,避免与 Vite dev server 打架。
-if (config.IS_PACKAGED && config.FRONTEND_DIST && fs.existsSync(config.FRONTEND_DIST)) {
+// ========== 前端静态资源(打包模式 / Electron dev) ==========
+// 普通 Web 开发仍走 Vite；Electron dev 则复用 dist,避免主窗口打开后端根路径 404。
+const SHOULD_SERVE_FRONTEND =
+  (config.IS_PACKAGED || process.env.T8PC_ELECTRON === '1') &&
+  config.FRONTEND_DIST &&
+  fs.existsSync(config.FRONTEND_DIST);
+
+if (SHOULD_SERVE_FRONTEND) {
   app.use(express.static(config.FRONTEND_DIST));
   // SPA 兑底: 除了 /api/* 与 /files/* 外,其他路由返回 index.html(允许前端路由)
   app.get(/^\/(?!api\/|files\/|input\/|output\/).*/, (_req, res) => {

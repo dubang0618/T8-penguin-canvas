@@ -112,6 +112,7 @@ async function startBackend() {
   process.env.HOST = '127.0.0.1';
   process.env.T8PC_USER_DATA = getUserDataDir();
   process.env.T8PC_PACKAGED = isPackaged() ? '1' : '0';
+  process.env.T8PC_ELECTRON = '1';
   process.env.T8PC_RES = isPackaged() ? process.resourcesPath : path.resolve(__dirname, '..');
   // 生产模式让 Express 同时托管前端 dist/
   process.env.T8PC_FRONTEND_DIST = isPackaged()
