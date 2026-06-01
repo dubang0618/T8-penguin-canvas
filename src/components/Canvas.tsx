@@ -352,7 +352,7 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
 const SNAP_GRID: [number, number] = [20, 20];
 const ALIGN_THRESHOLD = 6;
 const CANVAS_MIN_ZOOM = 0.02;
-const CANVAS_MAX_ZOOM = 5;
+const CANVAS_MAX_ZOOM = 10;
 
 interface SendNodeSpec {
   type: NodeType;
