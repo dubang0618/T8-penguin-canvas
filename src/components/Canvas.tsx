@@ -21,7 +21,7 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Play, Copy, CopyPlus, Trash2, FolderPlus, PackagePlus, Library, Download, Send as SendIcon } from 'lucide-react';
+import { Play, Copy, CopyPlus, Trash2, FolderPlus, PackagePlus, Library, Download, Workflow, Send as SendIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useCanvasStore } from '../stores/canvas';
 import { useThemeStore } from '../stores/theme';
@@ -58,6 +58,7 @@ import {
   type InstantiatedSendNodeFragment,
   type SendNodeFragment,
 } from '../utils/sendNodeFragment';
+import { createWorkflowResourceManifest } from '../utils/workflowResource';
 import {
   assignFreshNodeSerials,
   findNodeBySerialId,
@@ -75,6 +76,7 @@ import {
   type MaterialSetItem,
   type MaterialSetKind,
 } from '../utils/materialSet';
+import { chooseDefaultSendMode, resolveEffectiveSendMode } from '../utils/sendMode';
 import * as api from '../services/api';
 import { logBus } from '../stores/logs';
 import CanvasToolbar from './CanvasToolbar';
@@ -703,6 +705,13 @@ export interface AddNodeOptions {
 
 export type AddNodeFn = (type: NodeType, options?: AddNodeOptions) => void;
 
+export interface InsertWorkflowOptions {
+  atScreen?: { x: number; y: number };
+  title?: string;
+}
+
+export type InsertWorkflowFn = (fragment: SendNodeFragment, options?: InsertWorkflowOptions) => void;
+
 const MEDIA_EXTENSIONS: Record<MediaKind, string[]> = {
   image: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'],
   video: ['mp4', 'webm', 'mov', 'm4v', 'mkv'],
@@ -821,8 +830,8 @@ MJ系列模型（Default分组），不同模型的用法都不一样，参考�
 seedance2.0（Default分组）非远景推荐480P+FAST模式，质量吊打快乐马，价格只要5个币15秒，后续用flashvsr放大即可，720P满血15秒大概15币，不排队，支持真人
 seedance2.0（sd-global分组）需要联系T8微信单独开通，只支持企业开通，由于除版权外基本无审核，防止有人搞色情，需要签协议才能开通，价格和上面一样
 veo3.1模型，需要看下网站左侧分类教程，有多个分组可用，目前比较稳的是veo&grok备用分组2的veo3.1模型和默认分组的fal模型
-grok-video模型，需要看下网站左侧分类教程，有多个分组可用，目前比较稳的是fal模型，其他分组等我们系统升级后修复
-sora-2模型，由于官方下架了，新的我还没测试，晚点总结，建议先不用
+grok-video模型，需要看下网站左侧分类教程，有多个分组可用，目前比较稳的是fal模型，新增支持最新imagine 1.5模型（支持图生视频），最佳SD平替（default分组），以及veo&grok备用分组2，支持15秒多参生视频
+sora-2模型，由于官方下架了，虽然我加上了，但是目前有问题，先不要用
 
 音频模型注意事项：
 
@@ -857,9 +866,10 @@ function getReactFlowHandleInfo(target: EventTarget | null): {
 
 interface CanvasInnerProps {
   onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
+  onInsertWorkflowRef?: React.MutableRefObject<InsertWorkflowFn | null>;
 }
 
-function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
+function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
   const { activeId, canvases, loadCanvases, setActive } = useCanvasStore();
   const { theme, style, templateId, customTemplates } = useThemeStore();
   const currentTemplate = useMemo(
@@ -871,6 +881,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   const isNaruto = visualStyle === 'naruto';
   const isEva = visualStyle === 'eva';
   const isYyh = visualStyle === 'yyh';
+  const isSlamdunk = visualStyle === 'slamdunk';
   const themeTokens = getTemplateMode(currentTemplate, theme).tokens;
   const { screenToFlowPosition, setCenter, getViewport, setViewport, fitView } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -1510,17 +1521,6 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [downloadMaterialItem, getDownloadableItemsFromNodes],
   );
 
-  const inferSendModeFromNodes = useCallback((selectedNodes: Node[]): SendTargetMode => {
-    if (selectedNodes.length === 1) {
-      const type = String(selectedNodes[0].type || '');
-      if (type === 'portrait-master') return 'portrait-master';
-      if (type === 'material-set') return 'material-set';
-      if (type === 'upload') return 'upload';
-      if (type === 'output') return 'output';
-    }
-    return 'material-set';
-  }, []);
-
   const openSendMaterials = useCallback(
     (ids: string[], atScreen?: { x: number; y: number }) => {
       const selectedNodes = nodesRef.current.filter((node) => ids.includes(node.id) && node.id !== BULK_PHANTOM_ID);
@@ -1530,12 +1530,12 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         logBus.warn('所选内容没有可发送的节点或素材', '发送');
         return;
       }
-      const defaultMode =
-        nodeFragment.nodes.length > 1 && nodeFragment.edges.length > 0
-          ? 'node-fragment'
-          : materials.length > 0
-            ? inferSendModeFromNodes(selectedNodes)
-            : 'node-fragment';
+      const defaultMode = chooseDefaultSendMode({
+        selectedNodeTypes: selectedNodes.map((node) => String(node.type || '')),
+        nodeCount: nodeFragment.nodes.length,
+        edgeCount: nodeFragment.edges.length,
+        materialCount: materials.length,
+      });
       setSendModal({
         materials,
         nodeFragment,
@@ -1544,15 +1544,18 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         atScreen,
       });
     },
-    [activeId, inferSendModeFromNodes],
+    [activeId],
   );
 
   const resolveSendMode = useCallback((mode: SendTargetMode): SendTargetMode => {
-    if (mode !== 'auto') return mode;
-    if (sendModal?.defaultMode && sendModal.defaultMode !== 'auto') return sendModal.defaultMode;
-    if (sendModal?.nodeFragment?.nodes.length && sendModal.materials.length === 0) return 'node-fragment';
-    return 'material-set';
-  }, [sendModal?.defaultMode, sendModal?.materials.length, sendModal?.nodeFragment?.nodes.length]);
+    return resolveEffectiveSendMode({
+      requestedMode: mode,
+      defaultMode: sendModal?.defaultMode || 'auto',
+      nodeCount: sendModal?.nodeFragment?.nodes.length || 0,
+      edgeCount: sendModal?.nodeFragment?.edges.length || 0,
+      materialCount: sendModal?.materials.length || 0,
+    });
+  }, [sendModal?.defaultMode, sendModal?.materials.length, sendModal?.nodeFragment?.edges.length, sendModal?.nodeFragment?.nodes.length]);
 
   const basePositionForActiveSend = useCallback(() => {
     const atScreen = sendModal?.atScreen;
@@ -1562,9 +1565,40 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     return screenToFlowPosition(
       rect
         ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-        : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+      : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     );
   }, [screenToFlowPosition, sendModal?.atScreen]);
+
+  const insertWorkflowFragment = useCallback(
+    (fragment: SendNodeFragment, options: InsertWorkflowOptions = {}) => {
+      if (!fragment?.nodes?.length) {
+        logBus.warn('工作流资源没有可插入节点', '资源库');
+        return;
+      }
+      const base = options.atScreen ? screenToFlowPosition(options.atScreen) : basePositionForActiveSend();
+      const placedInstance = placeInstantiatedNodeFragment(
+        instantiateSendNodeFragment(fragment, nodesRef.current, base),
+        nodesRef.current,
+      );
+      const instance = {
+        ...placedInstance,
+        nodes: assignActiveNodeSerials(placedInstance.nodes, nodesRef.current),
+      };
+      const focusCenter = centerOfMaterialNodes(instance.nodes);
+      if (activeId && focusCenter) {
+        const { zoom } = getViewport();
+        pendingSendFocusRef.current = {
+          canvasId: activeId,
+          center: focusCenter,
+          zoom: Math.min(Math.max(zoom || 0.9, 0.72), 1.05),
+        };
+      }
+      setEdges([...edgesRef.current.map((edge) => ({ ...edge, selected: false })), ...instance.edges]);
+      setNodes([...nodesRef.current.map((node) => ({ ...node, selected: false })), ...instance.nodes]);
+      logBus.success(`已插入 ${options.title || summarizeSendNodeFragment(fragment)}`, '资源库');
+    },
+    [activeId, assignActiveNodeSerials, basePositionForActiveSend, getViewport, screenToFlowPosition],
+  );
 
   const handleSendMaterialsToCanvas = useCallback(
     async (targetCanvasId: string, mode: SendTargetMode, switchAfter: boolean) => {
@@ -1734,8 +1768,46 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [activeId, assignActiveNodeSerials, basePositionForActiveSend, getViewport, loadCanvases, resolveSendMode, sendModal, setActive],
   );
 
-  const handleSaveSendMaterialsToResource = useCallback(async () => {
-    if (!sendModal || sendModal.materials.length === 0) return;
+  const saveWorkflowFragmentToResource = useCallback(
+    async (fragment: SendNodeFragment | undefined, defaultTitle = '未命名工作流') => {
+      if (!fragment?.nodes?.length) {
+        logBus.warn('至少选择 1 个节点才能保存工作流', '资源库');
+        return false;
+      }
+      const title = window.prompt('工作流名称', defaultTitle);
+      if (!title?.trim()) return false;
+      try {
+        const manifest = createWorkflowResourceManifest(fragment, { title: title.trim() });
+        const result = await api.addResourceWorkflow({
+          workflowFragment: manifest,
+          title: manifest.title,
+          tags: ['工作流'],
+          sourceCanvasId: activeId || fragment.sourceCanvasId,
+        });
+        if (!result.success) throw new Error(result.error || '保存工作流失败');
+        window.dispatchEvent(new CustomEvent('penguin:resources-changed'));
+        const duplicate = Boolean((result as any).duplicate || (result.data as any)?.duplicate);
+        logBus.success(duplicate ? `资源库已有相同工作流：${manifest.title}` : `已保存工作流：${manifest.title}`, '资源库');
+        return true;
+      } catch (e: any) {
+        logBus.warn(e?.message || '保存工作流失败', '资源库');
+        return false;
+      }
+    },
+    [activeId],
+  );
+
+  const handleSaveSendMaterialsToResource = useCallback(async (mode?: SendTargetMode) => {
+    if (!sendModal) return;
+    const effectiveMode = resolveSendMode(mode || sendModal.defaultMode || 'auto');
+    if (effectiveMode === 'node-fragment') {
+      const fallbackTitle = sendModal.nodeFragment?.nodes.length
+        ? `${sendModal.nodeFragment.nodes.length}节点工作流`
+        : '未命名工作流';
+      await saveWorkflowFragmentToResource(sendModal.nodeFragment, fallbackTitle);
+      return;
+    }
+    if (sendModal.materials.length === 0) return;
     const buckets = bucketSendableMaterials(sendModal.materials);
     let saved = 0;
     const failures: string[] = [];
@@ -1769,7 +1841,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     window.dispatchEvent(new CustomEvent('penguin:resources-changed'));
     if (saved > 0) logBus.success(`已保存 ${saved} 项到资源库`, '发送素材');
     if (failures.length > 0) logBus.warn(failures.slice(0, 2).join('；'), '发送素材');
-  }, [activeId, sendModal]);
+  }, [activeId, resolveSendMode, saveWorkflowFragmentToResource, sendModal]);
 
   const handleSendMaterialsToEagle = useCallback(async () => {
     if (!sendModal || sendModal.materials.length === 0) return;
@@ -2558,6 +2630,15 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       if (onAddNodeRef) onAddNodeRef.current = null;
     };
   }, [onAddNodeRef, addNode]);
+
+  useEffect(() => {
+    if (onInsertWorkflowRef) {
+      onInsertWorkflowRef.current = insertWorkflowFragment;
+    }
+    return () => {
+      if (onInsertWorkflowRef) onInsertWorkflowRef.current = null;
+    };
+  }, [onInsertWorkflowRef, insertWorkflowFragment]);
 
   // xyflow 事件
   const onNodesChange = useCallback(
@@ -4415,8 +4496,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
             setCenter(position.x, position.y, { zoom, duration: 400 });
           }}
           style={{
-            width: isOp ? 144 : isNaruto ? 182 : isEva ? 258 : isYyh ? 224 : undefined,
-            height: isOp ? 144 : isNaruto ? 122 : isEva ? 172 : isYyh ? 144 : undefined,
+            width: isOp ? 144 : isNaruto ? 182 : isEva ? 258 : isYyh ? 224 : isSlamdunk ? 214 : undefined,
+            height: isOp ? 144 : isNaruto ? 122 : isEva ? 172 : isYyh ? 144 : isSlamdunk ? 128 : undefined,
             background: isOp
               ? themeTokens.panelBg
               : isNaruto
@@ -4424,6 +4505,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               : isEva
                 ? themeTokens.panelBg
               : isYyh
+                ? themeTokens.panelBg
+              : isSlamdunk
                 ? themeTokens.panelBg
               : isDark ? 'rgba(20,20,22,.9)' : 'rgba(255,255,255,.9)',
             border: isOp
@@ -4434,10 +4517,12 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
                   ? `2px solid ${themeTokens.borderStrong}`
               : isYyh
                   ? `2px solid ${themeTokens.accent}`
+              : isSlamdunk
+                  ? `3px solid ${themeTokens.textMain}`
                 : `1px solid ${isDark ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.08)'}`,
-            borderRadius: isOp ? 999 : isNaruto ? '18px 18px 12px 12px' : isEva ? 8 : isYyh ? 12 : 8,
-            right: isOp ? 24 : isNaruto ? 24 : isEva ? 24 : isYyh ? 24 : undefined,
-            bottom: isOp ? 42 : isNaruto ? 40 : isEva ? 24 : isYyh ? 28 : undefined,
+            borderRadius: isOp ? 999 : isNaruto ? '18px 18px 12px 12px' : isEva ? 8 : isYyh ? 12 : isSlamdunk ? 10 : 8,
+            right: isOp ? 24 : isNaruto ? 24 : isEva ? 24 : isYyh ? 24 : isSlamdunk ? 24 : undefined,
+            bottom: isOp ? 42 : isNaruto ? 40 : isEva ? 24 : isYyh ? 28 : isSlamdunk ? 32 : undefined,
             boxShadow: isOp
               ? `0 0 0 7px ${themeTokens.warning}, 5px 5px 0 ${themeTokens.textMain}`
               : isNaruto
@@ -4446,12 +4531,14 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
                   ? `0 0 0 4px ${themeTokens.panelBgElevated}, 0 0 0 6px ${themeTokens.borderStrong}, 0 18px 46px rgba(0,0,0,.5), inset 0 0 34px ${themeTokens.accent}22`
               : isYyh
                   ? `0 0 0 4px ${themeTokens.panelBgElevated}, 0 0 0 6px ${themeTokens.borderStrong}, 0 18px 46px rgba(0,0,0,.46), inset 0 0 34px ${themeTokens.secondary}22`
+              : isSlamdunk
+                  ? `0 0 0 5px ${themeTokens.secondary}, 5px 5px 0 ${themeTokens.textMain}, 0 18px 46px rgba(0,0,0,.28)`
               : undefined,
             cursor: 'pointer',
-            overflow: isOp || isNaruto || isEva || isYyh ? 'hidden' : undefined,
+            overflow: isOp || isNaruto || isEva || isYyh || isSlamdunk ? 'hidden' : undefined,
           }}
-          maskColor={isOp ? 'rgba(15,124,140,.28)' : isNaruto ? 'rgba(255,91,31,.22)' : isEva ? 'rgba(156,255,0,.18)' : isYyh ? 'rgba(67,247,255,.16)' : isDark ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.6)'}
-          nodeColor={() => (isOp ? themeTokens.secondary : isNaruto ? themeTokens.accent : isEva ? themeTokens.danger : isYyh ? themeTokens.success : isDark ? '#a1a1aa' : '#52525b')}
+          maskColor={isOp ? 'rgba(15,124,140,.28)' : isNaruto ? 'rgba(255,91,31,.22)' : isEva ? 'rgba(156,255,0,.18)' : isYyh ? 'rgba(67,247,255,.16)' : isSlamdunk ? 'rgba(240,123,34,.22)' : isDark ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.6)'}
+          nodeColor={() => (isOp ? themeTokens.secondary : isNaruto ? themeTokens.accent : isEva ? themeTokens.danger : isYyh ? themeTokens.success : isSlamdunk ? themeTokens.accent : isDark ? '#a1a1aa' : '#52525b')}
         />
         {/* 选中可执行节点时的浮动操作栏 (执行 / 中止 / 关闭) */}
         <NodeActionBar />
@@ -4713,6 +4800,21 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               )}
               <button
                 className={menuItemCls}
+                disabled={sendNodeCount === 0}
+                title={sendNodeCount > 0 ? '保存选中节点与内部连线为资源库工作流' : '请选择至少 1 个节点'}
+                onClick={() => {
+                  closeContextMenu();
+                  void saveWorkflowFragmentToResource(
+                    nodeFragmentPreview,
+                    sendEdgeCount > 0 ? `${sendNodeCount}节点${sendEdgeCount}线工作流` : `${sendNodeCount}节点工作流`,
+                  );
+                }}
+              >
+                <Workflow size={13} />
+                <span>保存工作流到资源库</span>
+              </button>
+              <button
+                className={menuItemCls}
                 disabled={!canSendSelection}
                 title={
                   canSendSelection
@@ -4842,6 +4944,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
 interface CanvasProps {
   onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
+  onInsertWorkflowRef?: React.MutableRefObject<InsertWorkflowFn | null>;
 }
 
 export default function Canvas(props: CanvasProps) {
