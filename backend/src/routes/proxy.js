@@ -289,6 +289,23 @@ function parseSseResponsesImageItems(text) {
   return items;
 }
 
+function extractResponsesStreamResponseId(text) {
+  const events = String(text || '').split(/\n\n+/);
+  for (const event of events) {
+    const dataLines = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter((line) => line && line !== '[DONE]');
+    if (!dataLines.length) continue;
+    let data;
+    try { data = JSON.parse(dataLines.join('\n')); } catch { continue; }
+    const id = data?.response?.id || data?.id;
+    if (typeof id === 'string' && id.startsWith('resp_')) return id;
+  }
+  return '';
+}
+
 async function saveSub2apiImageItems(items) {
   const urls = [];
   for (const item of items) {
@@ -820,6 +837,32 @@ router.post('/sub2api/image', async (req, res) => {
 
   const requestViaResponses = async (finalPrompt) => {
     const { upstreamUrl, init } = await buildResponsesRequest(finalPrompt);
+    const pollResponseResult = async (responseId) => {
+      for (let attempt = 0; attempt < 90; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 6 ? 1000 : 2500));
+        const pr = await fetchWithTimeout(`${baseUrl}/v1/responses/${encodeURIComponent(responseId)}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiKey}` },
+        }, 30000);
+        const body = await pr.text();
+        let data;
+        try { data = JSON.parse(body); } catch {
+          throw new Error('SUB2API Responses 轮询响应非 JSON: ' + body.slice(0, 300));
+        }
+        if (!pr.ok) {
+          throw new Error(data?.error?.message || data?.message || `SUB2API Responses Poll HTTP ${pr.status}`);
+        }
+        const urls = await saveSub2apiImageItems(collectResponsesImageItems(data));
+        if (urls.length) {
+          return { urls, raw: data, via: 'responses-poll', responseId };
+        }
+        const status = data?.status || data?.response?.status;
+        if (['failed', 'cancelled', 'canceled', 'incomplete'].includes(String(status || '').toLowerCase())) {
+          throw new Error(data?.error?.message || data?.incomplete_details?.reason || `SUB2API Responses 状态异常: ${status}`);
+        }
+      }
+      throw new Error(`SUB2API Responses 轮询超时: ${responseId}`);
+    };
     const r = await fetchWithTimeout(upstreamUrl, init, 300000);
     const text = await r.text();
     let data;
@@ -828,6 +871,8 @@ router.post('/sub2api/image', async (req, res) => {
       if (urls.length) {
         return { urls, raw: { stream: true }, via: 'responses-stream' };
       }
+      const responseId = extractResponsesStreamResponseId(text);
+      if (responseId) return pollResponseResult(responseId);
       throw new Error('SUB2API Responses 响应非 JSON: ' + text.slice(0, 300));
     }
     if (!r.ok) {
@@ -2806,3 +2851,8 @@ router.get('/runninghub/app-info', async (req, res) => {
 });
 
 module.exports = router;
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports.parseSseResponsesImageItemsForTest = parseSseResponsesImageItems;
+  module.exports.extractResponsesStreamResponseIdForTest = extractResponsesStreamResponseId;
+}
