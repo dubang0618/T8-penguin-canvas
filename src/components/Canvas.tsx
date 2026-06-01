@@ -351,6 +351,8 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
 // 网格吸附步长 / 对齐阈值(世界坐标)
 const SNAP_GRID: [number, number] = [20, 20];
 const ALIGN_THRESHOLD = 6;
+const CANVAS_MIN_ZOOM = 0.02;
+const CANVAS_MAX_ZOOM = 5;
 
 interface SendNodeSpec {
   type: NodeType;
@@ -4372,6 +4374,8 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
         selectionMode={SelectionMode.Partial}
         snapToGrid={snapEnabled}
         snapGrid={SNAP_GRID}
+        minZoom={CANVAS_MIN_ZOOM}
+        maxZoom={CANVAS_MAX_ZOOM}
         elevateNodesOnSelect={false}
         fitView
         proOptions={memoProOptions}
