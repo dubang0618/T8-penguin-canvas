@@ -50,6 +50,12 @@ import {
   externalImageSizeFor,
   resolveAdvancedProviderSelection,
 } from '../../utils/advancedProviders';
+import {
+  countExcludedMaterials,
+  excludeMaterialId,
+  filterExcludedMaterials,
+  normalizeExcludedMaterialIds,
+} from '../../utils/materialExclusion';
 
 /**
  * ImageNode - 图像生成(ZhenzhenMagic)
@@ -156,6 +162,22 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
 
   // ============ 上游素材聚合 (新机制) ============
   const upstream = useUpstreamMaterials(id);
+  const excludedMaterialIds = useMemo(
+    () => normalizeExcludedMaterialIds(d?.excludedMaterialIds),
+    [d?.excludedMaterialIds],
+  );
+  const visibleUpstreamImages = useMemo(
+    () => filterExcludedMaterials(upstream.images, excludedMaterialIds),
+    [upstream.images, excludedMaterialIds],
+  );
+  const visibleUpstreamTexts = useMemo(
+    () => filterExcludedMaterials(upstream.texts, excludedMaterialIds),
+    [upstream.texts, excludedMaterialIds],
+  );
+  const excludedUpstreamCount = useMemo(
+    () => countExcludedMaterials(excludedMaterialIds, [...upstream.images, ...upstream.texts]),
+    [excludedMaterialIds, upstream.images, upstream.texts],
+  );
   const localImageMaterials: Material[] = useMemo(
     () =>
       refImages.map((url, i) => ({
@@ -169,12 +191,12 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
     [refImages, id],
   );
   const allImagesUnordered = useMemo(
-    () => [...localImageMaterials, ...upstream.images],
-    [localImageMaterials, upstream.images],
+    () => [...localImageMaterials, ...visibleUpstreamImages],
+    [localImageMaterials, visibleUpstreamImages],
   );
   const materialOrder: string[] = Array.isArray(d?.materialOrder) ? d.materialOrder : [];
   const orderedImages = useOrderedMaterials(allImagesUnordered, materialOrder);
-  const orderedTexts = useOrderedMaterials(upstream.texts, materialOrder);
+  const orderedTexts = useOrderedMaterials(visibleUpstreamTexts, materialOrder);
   const mentionMaterials = useMemo(
     () => orderedImages.slice(0, maxRefs),
     [orderedImages, maxRefs],
@@ -184,6 +206,14 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
     if (m.origin !== 'local') return;
     update({ referenceImages: refImages.filter((u) => u !== m.url) });
   };
+  const handleExcludeUpstreamMaterial = (m: Material) => {
+    if (m.origin !== 'upstream') return;
+    update({
+      excludedMaterialIds: excludeMaterialId(excludedMaterialIds, m.id),
+      materialOrder: materialOrder.filter((itemId) => itemId !== m.id),
+    });
+  };
+  const handleRestoreExcludedMaterials = () => update({ excludedMaterialIds: [] });
 
   // 切换模型时,如果当前比例/尺寸不在新模型选项里则重置
   const switchModel = (mId: string) => {
@@ -1339,6 +1369,9 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
             order={materialOrder}
             onReorder={setMaterialOrder}
             onRemoveLocal={handleRemoveLocalMaterial}
+            onExcludeUpstream={handleExcludeUpstreamMaterial}
+            excludedCount={excludedUpstreamCount}
+            onRestoreExcluded={handleRestoreExcludedMaterials}
             selected={!!selected}
             isDark={isDark}
             isPixel={isPixel}
