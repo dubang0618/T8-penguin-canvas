@@ -45,7 +45,7 @@ const DEV_NODE_PORTS: Record<string, NodePorts> = import.meta.env?.DEV ? {
  */
 export const NODE_PORTS: Record<string, NodePorts> = {
   // ========== Core ==========
-  text: { inputs: [], outputs: ['text'] },
+  text: { inputs: ['text', 'image', 'video', 'audio'], outputs: ['text'] },
   image: { inputs: ['text', 'image'], outputs: ['image'] },
   // 视频节点默认模型仍只使用 text/image；选择即梦 CLI Seedance 时会消费 video/audio 参考。
   // 端口表是静态的，需提前允许四类输入，避免用户切到即梦 CLI 后无法连线。
@@ -125,6 +125,14 @@ export const NODE_PORTS: Record<string, NodePorts> = {
   'portrait-master': { inputs: ['text', 'metadata'], outputs: ['text', 'metadata'] },
   // 姿势大师二阶段: 兼容上游肖像/运镜文本与参考图。未连接时保持旧版独立输出行为。
   'pose-master': { inputs: ['text', 'image', 'metadata'], outputs: ['image', 'text', 'metadata'] },
+  // 聚合解析: 可直接接上游分享文案文本，输出解析摘要与媒体地址。
+  'aggregate-parser': { inputs: ['text'], outputs: ['text', 'image', 'video', 'audio'] },
+  // Topaz 本地高清化: 仅调用用户本机已安装的 Topaz 软件，不内置第三方商业程序。
+  'topaz-image-upscale': { inputs: ['image'], outputs: ['image'] },
+  'topaz-video-upscale': { inputs: ['video'], outputs: ['video'] },
+
+  // ========== 3D ==========
+  'panorama-3d': { inputs: ['image'], outputs: ['image'] },
 
   // ========== 上传素材节点 (NEW) ==========
   // 动态:由 data.uploadType 决定具体输出。未上传时 outputs=[],不允许连出。

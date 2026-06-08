@@ -31,6 +31,7 @@ const DEFAULT: ApiSettings = {
   nanoBananaApiKey: '',
   mjApiKey: '',
   veoApiKey: '',
+  soraApiKey: '',
   grokApiKey: '',
   seedanceApiKey: '',
   sunoApiKey: '',

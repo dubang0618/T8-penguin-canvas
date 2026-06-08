@@ -164,6 +164,12 @@ export interface CloudUploadTestResult {
   supported?: boolean;
   message?: string;
   error?: string;
+  code?: string;
+  hint?: string;
+  statusCode?: number;
+  providerCode?: string;
+  providerMessage?: string;
+  requestId?: string;
   target?: CloudUploadTargetConfig;
 }
 
@@ -301,7 +307,7 @@ export interface AddRHToolPayload {
 }
 
 export type OkData<T> = { success: true; data: T };
-export type ErrData = { success: false; error: string };
+export type ErrData = { success: false; error: string; data?: any };
 export type Result<T> = OkData<T> | ErrData;
 
 async function safeRequest<T>(url: string, init?: RequestInit): Promise<Result<T>> {
@@ -311,7 +317,7 @@ async function safeRequest<T>(url: string, init?: RequestInit): Promise<Result<T
       ...init,
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { success: false, error: json.error || `HTTP ${res.status}` };
+    if (!res.ok) return { success: false, error: json.error || `HTTP ${res.status}`, data: json.data };
     if (json && typeof json === 'object' && 'success' in json) return json as Result<T>;
     return { success: true, data: json as T };
   } catch (e: any) {
@@ -388,8 +394,9 @@ export function importRHToolsBackup(payload: RHToolsBackup, mode: 'replace' | 'm
 }
 
 // ========== 资源库 (v1.3.4) ==========
-export type ResourceKind = 'image' | 'video' | 'audio' | 'set' | 'pose' | 'workflow';
+export type ResourceKind = 'image' | 'video' | 'audio' | 'panorama' | 'set' | 'pose' | 'workflow';
 export type ResourceMediaKind = 'image' | 'video' | 'audio';
+export type ResourceAddKind = ResourceMediaKind | 'panorama';
 export type ResourceMaterialSetKind = 'text' | 'image' | 'video' | 'audio';
 
 export interface ResourceCategory {
@@ -461,7 +468,7 @@ export interface AddResourceSetPayload {
 
 export interface AddResourcePayload {
   url: string;
-  kind: ResourceMediaKind;
+  kind: ResourceAddKind;
   categoryId?: string;
   title?: string;
   tags?: string[];
@@ -588,6 +595,12 @@ export interface EagleImportResult {
   failures: Array<{ kind: string; name: string; error: string }>;
 }
 
+export interface FigmaImportResult {
+  base: string;
+  sent: number;
+  result?: any;
+}
+
 export function sendToEagle(payload: {
   materials: EagleImportMaterial[];
   tags?: string[];
@@ -595,6 +608,17 @@ export function sendToEagle(payload: {
   eagleApiBase?: string;
 }) {
   return safeRequest<EagleImportResult>(`${BASE}/eagle/import`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function sendToFigma(payload: {
+  materials: EagleImportMaterial[];
+  tags?: string[];
+  figmaApiBase?: string;
+}) {
+  return safeRequest<FigmaImportResult>(`${BASE}/figma/import`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -632,5 +656,203 @@ export function exportThemeTemplate(id: string) {
 export function deleteThemeTemplate(id: string) {
   return safeRequest<void>(`${BASE}/themes/templates/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+  });
+}
+
+// ========== 主题成就 / 时长 ==========
+
+export type AchievementEventType =
+  | 'theme.active_tick'
+  | 'theme.switched'
+  | 'hidden_mode.enabled'
+  | 'hidden_mode.used'
+  | 'node.created'
+  | 'node.run_success'
+  | 'resource.saved'
+  | 'workflow.saved'
+  | 'panorama.generated'
+  | 'parsehub.resolved'
+  | 'dragon_ball.collected'
+  | 'dragon_ball.set_completed';
+
+export interface AchievementEventPayload {
+  type: AchievementEventType;
+  theme?: string;
+  amountSeconds?: number;
+  nodeType?: string;
+  kind?: string;
+  mode?: string;
+  category?: string;
+}
+
+export interface AchievementSummary {
+  today: string;
+  todaySeconds: number;
+  totalActiveSeconds: number;
+  achievementCount: number;
+  unlockedCount: number;
+  filmCount: number;
+  unlockedFilmCount: number;
+  recentUnlocks: AchievementDefinitionData[];
+  recentFilms: AchievementUnlockedFilm[];
+  dailyTasks?: AchievementDailyTask[];
+  weeklyPassport?: AchievementWeeklyPassport;
+  creativeReview?: AchievementCreativeReview;
+  themeShowcases?: Record<string, AchievementThemeShowcase>;
+}
+
+export interface AchievementDailyTask {
+  id: string;
+  theme: string;
+  themeLabel: string;
+  accent: string;
+  achievementId: string;
+  title: string;
+  description: string;
+  progress: number;
+  target: number;
+  ratio: number;
+  targetKind: string;
+  todaySeconds: number;
+}
+
+export interface AchievementWeeklyPassportTheme {
+  theme: string;
+  themeLabel: string;
+  shortLabel: string;
+  accent: string;
+  weeklySeconds: number;
+  actionCount: number;
+  completed: boolean;
+}
+
+export interface AchievementWeeklyPassport {
+  weekStart: string;
+  weekEnd: string;
+  targetThemeCount: number;
+  completedThemeCount: number;
+  ratio: number;
+  themes: AchievementWeeklyPassportTheme[];
+}
+
+export interface AchievementCreativeReview {
+  topTheme?: { theme: string; themeLabel: string; activeSeconds: number } | null;
+  todayTopTheme?: { theme: string; themeLabel: string; todaySeconds: number } | null;
+  weeklyActiveSeconds: number;
+  weeklyThemeCount: number;
+  mostUsedNodeType?: { key: string; value: number } | null;
+  recentCreativeEventCount: number;
+  nodesCreated: number;
+  runsSucceeded: number;
+  resourcesSaved: number;
+  workflowsSaved: number;
+  hiddenModeActivations: number;
+}
+
+export interface AchievementThemeShowcase {
+  theme: string;
+  themeLabel: string;
+  resourcesSaved: number;
+  workflowsSaved: number;
+  panoramasGenerated: number;
+  parseHubResolved: number;
+  topCategory: string;
+  topCategoryCount: number;
+  lastActivityAt: string;
+  hasShowcase: boolean;
+}
+
+export interface AchievementDefinitionData {
+  id: string;
+  theme: string;
+  themeLabel: string;
+  title: string;
+  description: string;
+  rarity: string;
+  condition: Record<string, any>;
+  medal?: boolean;
+  hidden?: boolean;
+}
+
+export interface AchievementUnlocked {
+  id: string;
+  theme: string;
+  title: string;
+  rarity: string;
+  unlockedAt: string;
+  eventType?: string;
+}
+
+export interface AchievementUnlockedFilm {
+  id: string;
+  theme: string;
+  title: string;
+  unlockedAt: string;
+  sourceAchievementId: string;
+  hasMedia: boolean;
+  status: 'awaiting-media' | string;
+  lockedText?: string;
+  unavailableText?: string;
+  playedSeconds?: number;
+}
+
+export interface AchievementProfile {
+  schema: 't8-achievements';
+  version: number;
+  profileId: string;
+  createdAt: string;
+  updatedAt: string;
+  themeStats: Record<string, any>;
+  events: Array<Record<string, any>>;
+  unlockedAchievements: Record<string, AchievementUnlocked>;
+  claimedMedals: Record<string, any>;
+  unlockedFilms: Record<string, AchievementUnlockedFilm>;
+  preferences: {
+    enabled: boolean;
+    showToast: boolean;
+    showTopBadge: boolean;
+  };
+}
+
+export interface AchievementProfileData {
+  profile: AchievementProfile;
+  manifest: Record<string, any>;
+  definitions: AchievementDefinitionData[];
+  summary: AchievementSummary;
+  event?: Record<string, any>;
+  ignored?: boolean;
+  ignoredReason?: string;
+}
+
+export function getAchievementProfile() {
+  return safeRequest<AchievementProfileData>(`${BASE}/achievements/profile`);
+}
+
+export function recordAchievementEvent(payload: AchievementEventPayload) {
+  return safeRequest<AchievementProfileData>(`${BASE}/achievements/event`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAchievementPreferences(payload: Partial<AchievementProfile['preferences']>) {
+  return safeRequest<AchievementProfileData>(`${BASE}/achievements/preferences`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function resetAchievements() {
+  return safeRequest<AchievementProfileData>(`${BASE}/achievements/reset`, { method: 'POST' });
+}
+
+export function exportAchievements() {
+  return safeRequest<AchievementProfile>(`${BASE}/achievements/export`);
+}
+
+export function importAchievements(data: AchievementProfile | Record<string, any>) {
+  return safeRequest<AchievementProfileData>(`${BASE}/achievements/import`, {
+    method: 'POST',
+    body: JSON.stringify({ data }),
   });
 }

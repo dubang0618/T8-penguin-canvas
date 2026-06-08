@@ -34,6 +34,8 @@ import { useOrderedMaterials } from './useOrderedMaterials';
 import MaterialPreviewSection from './MaterialPreviewSection';
 import { useThemeStore } from '../../stores/theme';
 import MentionPromptInput from './MentionPromptInput';
+import SmartImage from '../SmartImage';
+import PromptTextarea from '../PromptTextarea';
 import { resolveMediaMentions, type MediaMention } from './mediaMentions';
 import { splitText } from '../../utils/textSplit';
 import { defaultSizeOf, placeBatchNodes, type Rect as PlacementRect } from '../../utils/nodePlacement';
@@ -53,7 +55,7 @@ import {
 
 /**
  * LLM / Vision 节点 —— 完全对齐 gpt-image-2-web Chat (index.html L1600 / L8128~L8400)
- *  - 6 个模型: gemini-3.1-flash-lite-preview(默认) / gemini-3.5-flash / gpt-4o / gemini-3.1-pro-preview / gpt-5 / gpt-image-2-all
+ *  - 6 个模型: gemini-3.1-flash-lite-preview / gemini-3.5-flash(默认) / gpt-4o / gemini-3.1-pro-preview / gpt-5 / gpt-image-2-all
  *  - temperature(0~2) + max_tokens(100~128000)
  *  - 系统提示词 + localStorage 预设保存/加载
  *  - 图像上传(多模态 vision)
@@ -208,6 +210,19 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
   const videoFrameCount: number = typeof d?.videoFrameCount === 'number' ? d.videoFrameCount : 12;
   const history: ChatTurn[] = Array.isArray(d?.history) ? d.history : [];
   const generatedImages: string[] = Array.isArray(d?.generatedImages) ? d.generatedImages : [];
+
+  const syncOutputFromHistory = useCallback((nextHistory: ChatTurn[], keepConsumedTexts = false) => {
+    const lastAssistant = [...nextHistory].reverse().find((t) => t.role === 'assistant');
+    const allAssistantImages = nextHistory.flatMap((t) => (t.role === 'assistant' && Array.isArray(t.images) ? t.images : []));
+    update({
+      history: nextHistory,
+      reply: lastAssistant?.text || '',
+      prompt: lastAssistant?.text || '',
+      generatedImages: allAssistantImages,
+      imageUrls: lastAssistant?.images && lastAssistant.images.length ? lastAssistant.images : [],
+      consumedTexts: lastAssistant && keepConsumedTexts ? d?.consumedTexts || [] : [],
+    });
+  }, [d?.consumedTexts, update]);
 
   const activeModel = isExternalSelected ? externalProviderModel : model;
   const src = `LLM·${activeModel || model}·#${id.slice(-4)}`;
@@ -478,7 +493,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
   };
 
   const handleClear = () => {
-    update({ history: [], reply: '', generatedImages: [], imageUrls: [] });
+    update({ history: [], reply: '', prompt: '', generatedImages: [], imageUrls: [], consumedTexts: [] });
     setStreamingText('');
     setPickedFiles([]);
     setPickedVideos([]);
@@ -529,6 +544,20 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
     if (e.key === 'Escape') {
       setEditingIdx(null);
     }
+  };
+
+  const handleDeleteHistoryTurn = (idx: number) => {
+    const target = history[idx];
+    if (!target) return;
+    const previousLastAssistantIndex = history.map((turn, index) => ({ turn, index })).reverse().find((item) => item.turn.role === 'assistant')?.index ?? -1;
+    const nextHistory = history.filter((_, index) => index !== idx);
+    const nextLastAssistantIndex = nextHistory.map((turn, index) => ({ turn, index })).reverse().find((item) => item.turn.role === 'assistant')?.index ?? -1;
+    syncOutputFromHistory(nextHistory, previousLastAssistantIndex !== idx && nextLastAssistantIndex >= 0);
+    if (editingIdx !== null) {
+      if (editingIdx === idx) setEditingIdx(null);
+      else if (editingIdx > idx) setEditingIdx(editingIdx - 1);
+    }
+    logBus.info(target.role === 'assistant' ? '已删除这条 LLM 结果' : '已删除这条 LLM 消息', src);
   };
 
   const scatterAssistantText = useCallback((text: string, mode: 'smart' | 'single' = 'smart') => {
@@ -843,12 +872,16 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
               )}
             </div>
           </div>
-          <textarea
+          <PromptTextarea
             ref={sysRef}
+            title="LLM 系统提示词"
             value={systemPrompt}
-            onChange={(e) => update({ system: e.target.value })}
+            onValueChange={(value) => update({ system: value })}
             placeholder="设定AI角色和行为..."
             className="w-full h-36 resize-none rounded bg-white/5 border border-white/10 px-2 py-1 text-[11px] text-white outline-none focus:border-white/30 placeholder:text-white/30 overflow-y-auto"
+            isDark={isDark}
+            isPixel={isPixel}
+            promptTemplateKind="image"
           />
         </div>
 
@@ -857,6 +890,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
           <label className="text-[10px] text-white/50 block mb-1">用户输入(优先取上游)</label>
           <MentionPromptInput
             editorRef={userRef}
+            title="LLM 用户输入"
             value={localPrompt}
             mentions={userPromptMentions}
             materials={orderedImages}
@@ -864,6 +898,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
             placeholder="备用:无上游连接时使用"
             isDark={isDark}
             isPixel={isPixel}
+            promptTemplateKind="image"
             className="w-full h-60 resize-none rounded bg-white/5 border border-white/10 px-2 py-1 text-[11px] text-white outline-none focus:border-white/30 placeholder:text-white/30 overflow-y-auto"
           />
         </div>
@@ -1081,7 +1116,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
             <div
               onDoubleClick={() => handleDoubleClickMsg(i)}
               className={`llm-chat-message relative whitespace-pre-wrap text-white/80 bg-white/[0.03] rounded p-1.5 ${
-                t.role === 'assistant' ? 'cursor-pointer hover:bg-white/[0.06] transition-colors pr-14' : ''
+                t.role === 'assistant' ? 'cursor-pointer hover:bg-white/[0.06] transition-colors pr-20' : ''
               }`}
             >
               {t.role === 'assistant' && t.text.trim() && (
@@ -1120,6 +1155,23 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
                   >
                     <Scissors size={13} />
                   </button>
+                  <button
+                    type="button"
+                    className="llm-chat-action-button llm-chat-action-button--delete t8-mini-icon-button nodrag nopan"
+                    title="删除这条 LLM 结果"
+                    aria-label="删除这条 LLM 结果"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDeleteHistoryTurn(i);
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </>
               )}
               {t.text || '[空]'}
@@ -1127,7 +1179,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
             {t.images && t.images.length > 0 && (
               <div className="flex gap-1 flex-wrap mt-1">
                 {t.images.map((u, j) => (
-                  <img
+                  <SmartImage
                     key={j}
                     src={u}
                     alt=""
@@ -1136,9 +1188,14 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
                     data-drag-url={u}
                     data-drag-preview={u}
                     data-drag-node-id={id}
+                    data-resource-title={u.split('/').pop() || '助手图像'}
+                    data-prompt-template-kind="image"
+                    data-prompt-template-category="image-reference-edit"
+                    data-prompt-template-prompt={t.text || localPrompt}
                     onMouseDown={(e) => beginMaterialDrag(e, { kind: 'image', url: u, sourceNodeId: id, previewUrl: u })}
                     className="w-12 h-12 object-cover rounded border border-white/10 cursor-grab"
                     title="按住 Ctrl 拖拽到其他节点"
+                    thumbSize={160}
                   />
                 ))}
               </div>
@@ -1156,6 +1213,10 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
                     data-drag-url={u}
                     data-drag-preview={u}
                     data-drag-node-id={id}
+                    data-resource-title={u.split('/').pop() || '助手视频'}
+                    data-prompt-template-kind="video"
+                    data-prompt-template-category="video-image-to-video"
+                    data-prompt-template-prompt={t.text || localPrompt}
                     onMouseDown={(e) => beginMaterialDrag(e, { kind: 'video', url: u, sourceNodeId: id, previewUrl: u })}
                     className="w-20 h-12 object-cover rounded border border-white/10 cursor-grab"
                     title="按住 Ctrl 拖拽到其他节点"

@@ -1,15 +1,45 @@
 // 自定义边组件:鼠标悬停时在中点显示剪刀按钮,点击可断开连线
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  useStore,
   useReactFlow,
   type EdgeProps,
 } from '@xyflow/react';
+import { useThemeStore } from '../../stores/theme';
+import { resolveThemeTemplate } from '../../theme/defaultTemplates';
 
 const SLAMDUNK_BASKETBALL_URL = new URL('../../assets/slamdunk-basketball-v2.png', import.meta.url).href;
 const SOCCER_BALL_URL = new URL('../../assets/soccer-ball-v2.png', import.meta.url).href;
+const DECORATIVE_EDGE_MOTION_LIMIT = 36;
+
+function isNodeSelectedFromStore(state: any, nodeId: string) {
+  const fromLookup = state?.nodeLookup?.get?.(nodeId);
+  if (fromLookup) return Boolean(fromLookup.selected);
+  const fromArray = Array.isArray(state?.nodes) ? state.nodes.find((node: any) => node?.id === nodeId) : null;
+  return Boolean(fromArray?.selected);
+}
+
+function countActiveThemeEdges(state: any) {
+  const edges = Array.isArray(state?.edges) ? state.edges : [];
+  const selectedNodeIds = new Set<string>();
+  if (state?.nodeLookup?.forEach) {
+    state.nodeLookup.forEach((node: any, nodeId: string) => {
+      if (node?.selected) selectedNodeIds.add(nodeId || node.id);
+    });
+  }
+  if (Array.isArray(state?.nodes)) {
+    for (const node of state.nodes) {
+      if (node?.selected) selectedNodeIds.add(node.id);
+    }
+  }
+  return edges.reduce((count: number, edge: any) => {
+    if (!edge) return count;
+    return count + (edge.selected || selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target) ? 1 : 0);
+  }, 0);
+}
 
 function edgeDelay(id: string) {
   let hash = 0;
@@ -36,6 +66,14 @@ export default function DeletableEdge(props: EdgeProps) {
     data,
   } = props;
   const { setEdges, getNode } = useReactFlow();
+  const sourceSelected = useStore((state: any) => isNodeSelectedFromStore(state, source));
+  const targetSelected = useStore((state: any) => isNodeSelectedFromStore(state, target));
+  const activeThemeEdgeCount = useStore(countActiveThemeEdges);
+  const { style: themeStyle, templateId, customTemplates } = useThemeStore();
+  const visualStyle = useMemo(
+    () => resolveThemeTemplate(templateId, customTemplates).visuals?.style || themeStyle,
+    [customTemplates, templateId, themeStyle],
+  );
   const sourceNode = getNode(source);
   const targetNode = getNode(target);
   const isRhDuckEdge = Boolean((data as any)?.rhDuckEdge || (targetNode?.data as any)?.rhDuckDecoded);
@@ -44,9 +82,18 @@ export default function DeletableEdge(props: EdgeProps) {
       (sourceNode?.data as any)?.yyhPortraitHidden ||
       (targetNode?.data as any)?.yyhPortraitHidden,
   );
+  const [hover, setHover] = useState(false);
+  const edgeDirectlyFocused = Boolean(selected || hover);
+  const nodeRelatedEdgeFocused = Boolean(sourceSelected || targetSelected);
+  const selectedNodeMotionWithinBudget =
+    activeThemeEdgeCount > 0 && activeThemeEdgeCount <= DECORATIVE_EDGE_MOTION_LIMIT;
+  const isThemeMotionActive =
+    edgeDirectlyFocused || (nodeRelatedEdgeFocused && selectedNodeMotionWithinBudget);
+  const themeActiveClass = isThemeMotionActive ? 't8-edge-theme-active' : '';
   const edgeClassName = [
     isRhDuckEdge ? 'rh-duck-edge' : '',
     isYyhPortraitHiddenEdge ? 'yyh-portrait-hidden-edge' : '',
+    themeActiveClass,
   ].filter(Boolean).join(' ') || undefined;
 
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -59,7 +106,6 @@ export default function DeletableEdge(props: EdgeProps) {
   });
 
   // 用延迟关闭避免鼠标从 path 切到按钮的瞬间闪烁
-  const [hover, setHover] = useState(false);
   const hideTimer = useRef<number | null>(null);
   const show = () => {
     if (hideTimer.current) {
@@ -74,7 +120,10 @@ export default function DeletableEdge(props: EdgeProps) {
   };
 
   const visible = hover || !!selected;
-  const passBallDelay = edgeDelay(id);
+  const canRenderDecorativeMotion = isThemeMotionActive;
+  const shouldRenderPassBall = visualStyle === 'slamdunk' && canRenderDecorativeMotion;
+  const shouldRenderSoccerBall = visualStyle === 'soccer-hero' && canRenderDecorativeMotion;
+  const passBallDelay = (shouldRenderPassBall || shouldRenderSoccerBall) ? edgeDelay(id) : '0s';
 
   const handleCut = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -94,7 +143,7 @@ export default function DeletableEdge(props: EdgeProps) {
       />
       {!isYyhPortraitHiddenEdge && (
         <path
-          className="t8-edge-yyh-red-segment"
+          className={`t8-edge-yyh-red-segment ${themeActiveClass}`.trim()}
           d={edgePath}
           fill="none"
           stroke="transparent"
@@ -103,44 +152,48 @@ export default function DeletableEdge(props: EdgeProps) {
           aria-hidden="true"
         />
       )}
-      <g className="t8-edge-pass-ball" aria-hidden="true">
-        <g className="t8-edge-pass-ball__sprite">
-          <animateMotion
-            dur="1.9s"
-            repeatCount="indefinite"
-            path={edgePath}
-            begin={passBallDelay}
-          />
-          <image
-            className="t8-edge-pass-ball__image"
-            href={SLAMDUNK_BASKETBALL_URL}
-            x={-11}
-            y={-11}
-            width={22}
-            height={22}
-            preserveAspectRatio="xMidYMid meet"
-          />
+      {shouldRenderPassBall && (
+        <g className={`t8-edge-pass-ball ${themeActiveClass}`.trim()} aria-hidden="true">
+          <g className="t8-edge-pass-ball__sprite">
+            <animateMotion
+              dur="1.9s"
+              repeatCount="indefinite"
+              path={edgePath}
+              begin={passBallDelay}
+            />
+            <image
+              className="t8-edge-pass-ball__image"
+              href={SLAMDUNK_BASKETBALL_URL}
+              x={-11}
+              y={-11}
+              width={22}
+              height={22}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          </g>
         </g>
-      </g>
-      <g className="t8-edge-soccer-ball" aria-hidden="true">
-        <g className="t8-edge-soccer-ball__sprite">
-          <animateMotion
-            dur="2.05s"
-            repeatCount="indefinite"
-            path={edgePath}
-            begin={passBallDelay}
-          />
-          <image
-            className="t8-edge-soccer-ball__image"
-            href={SOCCER_BALL_URL}
-            x={-11}
-            y={-11}
-            width={22}
-            height={22}
-            preserveAspectRatio="xMidYMid meet"
-          />
+      )}
+      {shouldRenderSoccerBall && (
+        <g className={`t8-edge-soccer-ball ${themeActiveClass}`.trim()} aria-hidden="true">
+          <g className="t8-edge-soccer-ball__sprite">
+            <animateMotion
+              dur="2.05s"
+              repeatCount="indefinite"
+              path={edgePath}
+              begin={passBallDelay}
+            />
+            <image
+              className="t8-edge-soccer-ball__image"
+              href={SOCCER_BALL_URL}
+              x={-11}
+              y={-11}
+              width={22}
+              height={22}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          </g>
         </g>
-      </g>
+      )}
       {/* 透明的加宽 hit area,捕捉鼠标 hover (BaseEdge 的 interactionWidth 已自带,这里再补一层,确保事件有响应) */}
       <path
         d={edgePath}

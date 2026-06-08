@@ -35,6 +35,7 @@ import { useOrderedMaterials } from './useOrderedMaterials';
 import MaterialPreviewSection from './MaterialPreviewSection';
 import MentionPromptInput from './MentionPromptInput';
 import LoopingVideo from '../LoopingVideo';
+import SmartImage from '../SmartImage';
 import { resolveMediaMentions, type MediaMention } from './mediaMentions';
 import { useDragMaterialStore, type MaterialPayload } from '../../stores/dragMaterial';
 import { useMaterialDropTarget } from '../../hooks/useMaterialDropTarget';
@@ -51,13 +52,14 @@ import {
   filterExcludedMaterials,
   normalizeExcludedMaterialIds,
 } from '../../utils/materialExclusion';
+import { LocalNodeAddonSlot } from 'virtual:t8-local-extensions';
 
 /**
  * VideoNode - 异步视频生成(完全对齐 gpt-image-2-web)
  * 支持:
- *   - Veo 3.1   (kind=veo)      — 13 个子模型 / aspect_ratio(16:9|9:16) / seed / enhance_prompt / enable_upsample / images(≤3)
+ *   - Veo      (kind=veo)       — 默认 veo-omni-10s / 旧 Veo 3.1 子模型 / images(≤3)
  *   - Grok Video(kind=grok)     — Grok Video 1.5 FAL 默认 / 旧版 FAL / grok-video-3 / images(≤7)
- *   - Sora2 FAL (kind=sora)     — 文生/图生视频 / Base64 参考图(≤1) / duration / resolution
+ *   - Sora2    (kind=sora)      — Zhenzhen API + FAL 双渠道 / Base64 参考图(≤1)
  *   - Seedance  (kind=seedance) — 零破坏兼容旧 veo 字段
  * 流程: submit → poll(5s 间隔) → 转存 → 展示
  */
@@ -67,12 +69,27 @@ const VIDEO_MAX_POLL = Math.ceil((VIDEO_POLL_TIMEOUT_SECONDS * 1000) / VIDEO_POL
 const VIDEO_FAL_POLL_INTERVAL_MS = 6000;
 const VIDEO_FAL_MAX_POLL = Math.ceil((VIDEO_POLL_TIMEOUT_SECONDS * 1000) / VIDEO_FAL_POLL_INTERVAL_MS);
 const JIMENG_SEEDANCE_LIMITS = { images: 9, videos: 3, audios: 3 };
+type JimengSeedanceMode = 'omni' | 'first' | 'firstlast' | 'multiframe';
+const JIMENG_SEEDANCE_MODE_OPTIONS: Array<{ value: JimengSeedanceMode; label: string }> = [
+  { value: 'omni', label: '全能参考' },
+  { value: 'first', label: '首帧图生视频' },
+  { value: 'firstlast', label: '首尾帧生视频' },
+  { value: 'multiframe', label: '智能多帧' },
+];
 
 const splitGrokFalRefUrls = (raw: string): string[] =>
   String(raw || '')
     .split(/[\n,，]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+const normalizeJimengSeedanceMode = (value: unknown): JimengSeedanceMode => {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'first') return 'first';
+  if (text === 'firstlast' || text === 'first_last' || text === 'frames2video') return 'firstlast';
+  if (text === 'multiframe' || text === 'smart' || text === 'smart-multiframe') return 'multiframe';
+  return 'omni';
+};
 
 const VideoNode = ({ id, data, selected }: NodeProps) => {
   const update = useUpdateNodeData(id);
@@ -88,6 +105,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
   const isPixel = themeStyle === 'pixel';
 
   const d = data as any;
+  const providerParams = (d?.providerParams && typeof d.providerParams === 'object') ? d.providerParams : {};
   const advancedProviders = useApiKeysStore((s) => s.settings.advancedProviders);
   const videoAdvancedProviders = useMemo(
     () => advancedProvidersForNode(advancedProviders, 'video'),
@@ -109,6 +127,8 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
   const externalProviderModel = providerSelection.providerModel || externalModelOptions[0] || '';
   const isJimengCliSelected = isExternalSelected && providerSelection.provider?.protocol === 'jimeng-cli';
   const isJimengSeedanceSelected = isJimengCliSelected && /seedance|jimeng-video|video/i.test(externalProviderModel);
+  const jimengSeedanceMode = normalizeJimengSeedanceMode(providerParams.frameMode ?? d?.jimengFrameMode);
+  const updateProviderParams = (patch: Record<string, any>) => update({ providerParams: { ...providerParams, ...patch } });
   // 主模型 id (对应 VIDEO_MODELS 项)
   const rawModel = typeof d?.model === 'string' ? d.model : '';
   const isLegacySora2Model = /^sora-2(?:-\d{4}-\d{2}-\d{2})?$/.test(rawModel);
@@ -128,6 +148,8 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
   const isFal = isFalVideoModel(apiModel);
   const falReg = isFal ? VIDEO_FAL_REGISTRY[apiModel] : null;
   const isGrokFalV15 = apiModel === 'grok-imagine-video-1.5';
+  const isSoraZhenzhen = !isExternalSelected && modelDef.kind === 'sora' && !isFal;
+  const isVeoOmni = !isExternalSelected && apiModel === 'veo-omni-10s';
   const showBuiltinFalControls = !isExternalSelected && isFal && !!falReg;
   const showGenericVideoControls = isExternalSelected || !isFal;
   const ratioOptions = isJimengSeedanceSelected
@@ -161,6 +183,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
   const soraDeleteVideo: boolean = d?.soraDeleteVideo ?? true;
   const soraBlockIp: boolean = d?.soraBlockIp ?? false;
   const soraCharacterIds: string = d?.soraCharacterIds || '';
+  const soraPrivate: boolean = d?.soraPrivate ?? true;
 
   const status: 'idle' | 'submitting' | 'polling' | 'success' | 'error' = d?.status || 'idle';
   const taskId: string | undefined = d?.taskId;
@@ -244,7 +267,9 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
     [localRefImages, localRefVideos, localRefAudios, id],
   );
   const maxMentionRefs =
-    isJimengSeedanceSelected
+    isVeoOmni
+      ? 1
+      : isJimengSeedanceSelected
       ? JIMENG_SEEDANCE_LIMITS.images
       : isFal && falReg
       ? falReg.paramKind === 'grok-fal' && (isGrokFalV15 || gkfMode !== 'reference_to_video')
@@ -430,6 +455,11 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
       logBus.error('生成中止: 缺少 prompt', src);
       return;
     }
+    if (isVeoOmni && imageUrls.length === 0) {
+      setError('veo-omni-10s 需要 1 张参考图');
+      logBus.error('生成中止: veo-omni-10s 缺少参考图', src);
+      return;
+    }
     taskCompletionSound.primeAudio();
     update({ status: 'submitting', error: null, videoUrl: null, taskId: null });
     try {
@@ -457,7 +487,9 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
           images: refs,
           videos: videoRefs,
           audios: audioRefs,
-          providerParams: d?.providerParams,
+          providerParams: isJimengSeedanceSelected
+            ? { ...providerParams, frameMode: jimengSeedanceMode }
+            : providerParams,
         });
         const nextVideoUrl = r.videoUrls[0];
         if (!nextVideoUrl) throw new Error('扩展平台没有返回视频。');
@@ -488,7 +520,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
           images = refs;
         }
 
-        const falReq: VideoFalSubmitRequest = { apiModel, prompt: finalPrompt };
+        const falReq: VideoFalSubmitRequest = { apiModel, prompt: finalPrompt, providerParams };
         if (images && images.length) falReq.images = images;
 
         if (falReg.paramKind === 'veo-fal') {
@@ -561,8 +593,8 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
       // === 原有贞贞工坊分支 ===
       // 参考图预处理:
       //   - Grok: 直接传 URL (本地 /files/* 也可,后端会转上游 URL)
-      //   - Veo / Seedance: 转 base64
-      const refs = imageUrls.slice(0, modelDef.maxRefImages);
+      //   - Veo / Sora2 / Seedance: 转 base64
+      const refs = imageUrls.slice(0, isVeoOmni ? 1 : modelDef.maxRefImages);
       let images: string[] | undefined;
       if (modelDef.supportImages && refs.length > 0) {
         if (modelDef.kind === 'grok') {
@@ -578,24 +610,39 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
       }
 
       // 按 kind 走不同字段(完全对齐 gpt-image-2-web payload)
-      const payload: VideoSubmitRequest = { model: apiModel, prompt: finalPrompt };
+      const payload: VideoSubmitRequest = { model: apiModel, prompt: finalPrompt, providerParams };
       if (modelDef.kind === 'grok') {
         payload.ratio = ratio;
         payload.duration = Number(duration) || modelDef.defaultDuration || 15;
         payload.resolution = resolution || modelDef.defaultResolution || '720P';
         if (seed > 0) payload.seed = seed;
+      } else if (modelDef.kind === 'sora') {
+        payload.aspect_ratio = ratio;
+        payload.duration = Number(duration) || modelDef.defaultDuration || 15;
+        payload.private = soraPrivate;
+        if (seed > 0) payload.seed = seed;
       } else {
         // veo / seedance
         payload.aspect_ratio = ratio;
-        payload.enhance_prompt = enhancePrompt;
-        if (enableUpsample) payload.enable_upsample = true;
+        if (isVeoOmni) {
+          payload.duration = 10;
+        } else {
+          payload.enhance_prompt = enhancePrompt;
+          if (enableUpsample) payload.enable_upsample = true;
+        }
         if (seed > 0) payload.seed = seed;
       }
       if (images && images.length) payload.images = images;
 
       logBus.info(
         `提交任务: kind=${modelDef.kind} model=${apiModel} ratio=${ratio}` +
-        (modelDef.kind === 'grok' ? ` duration=${payload.duration}s resolution=${payload.resolution}` : ` enhance=${payload.enhance_prompt}`) +
+        (modelDef.kind === 'grok'
+          ? ` duration=${payload.duration}s resolution=${payload.resolution}`
+          : modelDef.kind === 'sora'
+            ? ` duration=${payload.duration}s private=${payload.private}`
+            : isVeoOmni
+              ? ' duration=10s endpoint=/v1/videos'
+              : ` enhance=${payload.enhance_prompt}`) +
         ` refs=${images?.length || 0} prompt="${finalPrompt.slice(0, 30)}…"`,
         src,
       );
@@ -795,6 +842,8 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
                 update({
                   model: nextModel,
                   ...(nextModel === 'grok-imagine-video-1.5' ? { gkfMode: 'image_to_video' } : {}),
+                  ...(nextModel === 'sora-2-zhenzhen' ? { ratio: '16:9', duration: 15, resolution: '' } : {}),
+                  ...(nextModel === 'veo-omni-10s' ? { ratio: '16:9', duration: 10, resolution: '' } : {}),
                 });
               }}
               className="w-full rounded bg-white/5 border border-white/10 px-2 py-1 text-xs text-white outline-none focus:border-white/30"
@@ -805,6 +854,22 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
             </select>
           </div>
         )}
+
+        <LocalNodeAddonSlot
+          nodeId={id}
+          nodeType="video"
+          data={d}
+          update={update}
+          context={{
+            providerSource: isExternalSelected ? providerSelection.providerSource : 'zhenzhen',
+            providerId: providerSelection.providerId,
+            providerModel: isExternalSelected ? externalProviderModel : apiModel,
+            model: apiModel,
+            apiModel,
+            mainId,
+            providerKind: isFal ? 'fal' : modelDef.kind,
+          }}
+        />
 
         {/* === FAL 专属参数面板 === */}
         {showBuiltinFalControls && falReg?.paramKind === 'veo-fal' && (
@@ -964,6 +1029,60 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
           </>
         )}
 
+        {isSoraZhenzhen && (
+          <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-semibold text-white/70">Sora2 Zhenzhen API</span>
+              <span className="text-[9px] text-white/35">参考图 ≤ 1</span>
+            </div>
+            <label className="flex items-center gap-1.5 text-[10px] text-white/60 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={soraPrivate}
+                onChange={(e) => update({ soraPrivate: e.target.checked })}
+                className="accent-rose-400"
+              />
+              Private
+            </label>
+            <div className="text-[10px] text-white/40 leading-relaxed">
+              提交到 /v2/videos/generations，真实模型名为 sora-2；参考图会转为裸 Base64。
+            </div>
+          </div>
+        )}
+
+        {isVeoOmni && (
+          <div className="rounded border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] leading-relaxed text-white/45">
+            Veo Omni 走 /v1/videos，固定调用 omni_flash-10s，需要 1 张参考图；16:9=1280x720，9:16=720x1280。
+          </div>
+        )}
+
+        {isJimengSeedanceSelected && (
+          <div className="rounded border border-white/10 bg-white/5 p-1.5 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[10px] text-white/50">即梦模式</label>
+              <span className="text-[9px] text-white/35">图9 / 视3 / 音3</span>
+            </div>
+            <select
+              value={jimengSeedanceMode}
+              onChange={(e) => updateProviderParams({ frameMode: e.target.value })}
+              className="w-full rounded bg-white/5 border border-white/10 px-2 py-1 text-xs text-white outline-none focus:border-white/30"
+            >
+              {JIMENG_SEEDANCE_MODE_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value} className="bg-zinc-900">{item.label}</option>
+              ))}
+            </select>
+            <div className="text-[10px] text-white/40 leading-relaxed">
+              {jimengSeedanceMode === 'omni'
+                ? '全能参考支持图片、视频和音频混合输入；纯多图也会走全能参考。'
+                : jimengSeedanceMode === 'first'
+                  ? '只取第 1 张图作为首帧。'
+                  : jimengSeedanceMode === 'firstlast'
+                    ? '取第 1 张为首帧，第 2 张为尾帧。'
+                    : '仅使用图片序列生成智能多帧。'}
+            </div>
+          </div>
+        )}
+
         {/* 比例(非 FAL 时显示原始控件) */}
         {showGenericVideoControls && (
         <div className="grid grid-cols-2 gap-1.5">
@@ -1014,7 +1133,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
         )}
 
         {/* veo 专用选项(非FAL) */}
-        {!isExternalSelected && !isFal && modelDef.kind === 'veo' && (
+        {!isExternalSelected && !isFal && modelDef.kind === 'veo' && !isVeoOmni && (
           <div className="grid grid-cols-2 gap-1.5">
             <label className="flex items-center gap-1 text-[10px] text-white/60 cursor-pointer">
               <input
@@ -1082,7 +1201,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
               <div className="flex gap-1 flex-wrap">
                 {localRefImages.map((u, i) => (
                   <div key={`img-${i}`} className="relative w-10 h-10">
-                    <img
+                    <SmartImage
                       src={u}
                       alt=""
                       data-drag-source
@@ -1092,6 +1211,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
                       data-drag-node-id={id}
                       onMouseDown={(e) => beginMaterialDrag(e, { kind: 'image', url: u, sourceNodeId: id, previewUrl: u })}
                       className="w-10 h-10 object-cover rounded border border-white/10 cursor-grab"
+                      thumbSize={160}
                     />
                     <button
                       onClick={() => update({ localRefImages: localRefImages.filter((x) => x !== u) })}
@@ -1161,6 +1281,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
         <div>
           <label className="text-[10px] text-white/50 block mb-1">本地 Prompt(可选)</label>
           <MentionPromptInput
+            title="视频 Prompt"
             value={localPrompt}
             mentions={promptMentions}
             materials={mentionMaterials}
@@ -1168,6 +1289,7 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
             placeholder="备用:无上游连接时使用"
             isDark={isDark}
             isPixel={isPixel}
+            promptTemplateKind="video"
             className="w-full h-12 resize-none rounded bg-white/5 border border-white/10 px-2 py-1 text-[11px] text-white outline-none focus:border-white/30 placeholder:text-white/30"
           />
         </div>
@@ -1216,6 +1338,10 @@ const VideoNode = ({ id, data, selected }: NodeProps) => {
             data-drag-url={videoUrl}
             data-drag-preview={videoUrl}
             data-drag-node-id={id}
+            data-resource-title={videoUrl.split('/').pop() || '生成视频'}
+            data-prompt-template-kind="video"
+            data-prompt-template-category="video-image-to-video"
+            data-prompt-template-prompt={d?.lastPrompt || localPrompt}
             onMouseDown={(e) => beginMaterialDrag(e, { kind: 'video', url: videoUrl, sourceNodeId: id, previewUrl: videoUrl })}
             title="按住 Ctrl 拖拽到其他节点"
           />

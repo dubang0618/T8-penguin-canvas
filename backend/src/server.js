@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { startFigmaBridgeOnAppStart } = require('./utils/figmaBridge');
 
 const app = express();
 
@@ -60,9 +61,15 @@ const imageOpsRouter = require('./routes/imageOps');
 const resourcesRouter = require('./routes/resources');
 const themesRouter = require('./routes/themes');
 const eagleRouter = require('./routes/eagle');
+const figmaRouter = require('./routes/figma');
 const externalProvidersRouter = require('./routes/externalProviders');
 const aiWatermarkRouter = require('./routes/aiWatermark');
 const cloudUploadsRouter = require('./routes/cloudUploads');
+const parseHubRouter = require('./routes/parseHub');
+const achievementsRouter = require('./routes/achievements');
+const topazRouter = require('./routes/topaz');
+const { registerLocalExtensions } = require('./extensions/localExtensions');
+const localHooks = require('./extensions/runtimeHooks');
 
 app.use('/api/canvas', canvasRouter);
 app.use('/api/settings', settingsRouter);
@@ -73,8 +80,13 @@ app.use('/api/image', imageOpsRouter);
 app.use('/api/resources', resourcesRouter);
 app.use('/api/themes', themesRouter);
 app.use('/api/eagle', eagleRouter);
+app.use('/api/figma', figmaRouter);
 app.use('/api/ai-watermark', aiWatermarkRouter);
 app.use('/api/cloud-uploads', cloudUploadsRouter);
+app.use('/api/parsehub', parseHubRouter);
+app.use('/api/achievements', achievementsRouter);
+app.use('/api/topaz', topazRouter);
+registerLocalExtensions(app, { config, express, logger: console, hooks: localHooks });
 
 // ========== 前端静态资源(打包模式 / Electron dev) ==========
 // 普通 Web 开发仍走 Vite；Electron dev 则复用 dist,避免主窗口打开后端根路径 404。
@@ -104,6 +116,8 @@ app.listen(PORT, HOST, () => {
   console.log(`   环境: ${config.NODE_ENV}`);
   console.log(`   数据目录: ${config.DATA_DIR}`);
   console.log(`   输出目录: ${config.OUTPUT_DIR}`);
+  console.log('   Figma Bridge: 自动启动中（如需禁用可设置 T8_FIGMA_BRIDGE_AUTOSTART=0）');
   console.log('   按 Ctrl+C 停止服务器...');
   console.log('--------------------------------------------------');
+  startFigmaBridgeOnAppStart(console);
 });

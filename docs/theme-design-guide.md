@@ -42,6 +42,8 @@ macOS / Linux: ~/zhenzhen/theme-templates
 | `eva` | 指挥所、同步、警戒 | EVA 风格，强调初号机紫、荧光同步绿、MAGI 雷达、AT Field 几何和装甲面板。 |
 | `yyh` | 灵界侦探、霓虹街区、战斗卡 | 幽游白书风格，强调灵丸能量、暗紫青绿终端、REI MAP 机械小地图和灵界符号水印。 |
 | `slamdunk` | 热血篮球馆、漫画分镜、战术板 | 灌篮高手风格，强调木地板球场、红黑球衣、计分牌节点、传球弧线和半场战术 MiniMap。 |
+| `soccer-hero` | 绿茵热血、比分牌、传球轨迹 | 足球小将风格，强调整场球场、蓝白球衣、比赛卡片、传球轨迹和球场 MiniMap。 |
+| `dragon-ball` | 热血冒险、胶囊设备、神龙雷达 | 七龙珠风格，强调胶囊公司设备面板、神龙雷达画布、七颗龙珠徽章、气功波连线和原创合成音乐。 |
 
 如果你只导入 JSON，不应该写新的 `style` 字符串。后端会过滤未知枚举，未知值会回退到现有风格。
 
@@ -56,9 +58,9 @@ macOS / Linux: ~/zhenzhen/theme-templates
 - MiniMap、缩放控制条、音乐按钮、右键菜单等浮层。
 - GroupBox 打组后的组边框、背景、水印和输出口。
 
-主题识别度来自重复出现的“视觉母题”，例如 OP 风格使用海图、悬赏令、草帽、赤红、海蓝、金币金；RH 风格使用黑绿工作台、荧光运行态、云工作流网格和无边框卡片；火影忍者风格使用木叶护额、卷轴纸、查克拉蓝、火焰橙红和忍术阵纹理；EVA 风格使用初号机紫、荧光同步绿、警戒橙红、MAGI 雷达、AT Field 几何和装甲面板；幽游白书风格使用灵丸能量、霓虹灵界地图、暗紫青绿终端、REI MAP 小地图和战斗卡片；灌篮高手风格使用木地板球场、红黑球衣、计分牌、传球弧线、战术板和篮球橙；像素糖果风使用硬描边、贴纸卡片、糖果色、圆胶囊和硬阴影。
+主题识别度来自重复出现的“视觉母题”，例如 OP 风格使用海图、悬赏令、草帽、赤红、海蓝、金币金；RH 风格使用黑绿工作台、荧光运行态、云工作流网格和无边框卡片；火影忍者风格使用木叶护额、卷轴纸、查克拉蓝、火焰橙红和忍术阵纹理；EVA 风格使用初号机紫、荧光同步绿、警戒橙红、MAGI 雷达、AT Field 几何和装甲面板；幽游白书风格使用灵丸能量、霓虹灵界地图、暗紫青绿终端、REI MAP 小地图和战斗卡片；灌篮高手风格使用木地板球场、红黑球衣、计分牌、传球弧线、战术板和篮球橙；足球小将风格使用绿茵球场、蓝白球衣、比分牌和传球轨迹；七龙珠风格使用胶囊公司设备、神龙雷达、七颗龙珠徽章、橙金气功波和深蓝科技反差；像素糖果风使用硬描边、贴纸卡片、糖果色、圆胶囊和硬阴影。
 
-SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节点、端口和背景，也要为 `--t8-cut-cursor`、`--t8-cut-button-mask`、`--t8-cut-color` 提供主题化切断符号，例如 OP 用弯刀、RH 用断链、火影用手里剑、EVA 用 Prog Knife、幽游白书用灵剑、灌篮高手用篮球 / 哨子，避免所有主题都显示默认剪刀。
+SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节点、端口和背景，也要为 `--t8-cut-cursor`、`--t8-cut-button-mask`、`--t8-cut-color` 提供主题化切断符号，例如 OP 用弯刀、RH 用断链、火影用手里剑、EVA 用 Prog Knife、幽游白书用灵剑、灌篮高手用篮球 / 哨子、足球小将用足球 / 哨子、七龙珠用四星球 / 能量星，避免所有主题都显示默认剪刀。
 
 浅色模式不能只检查外壳颜色。很多历史节点内部仍可能带有 `text-white/*`、`bg-white/*`、`border-white/*`、cyan/violet 标签、状态色或旧 Tailwind 工具类。新增官方主题时必须为这些 legacy internal controls 做适配层，并分别检查节点标题、字段名、参数标签、实际发送、错误提示、按钮和表单在 light/dark 两种模式下的可读性。EVA 浅色模式就是通过这一层把老节点内部暗色工具类重新映射到主题主文字、弱文字、同步绿/警戒红和浅面板背景。
 
@@ -231,11 +233,11 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 
 | 字段 | 可选值 | 说明 |
 |---|---|---|
-| `style` | `plain` / `tech` / `pixel` / `op` / `rh` / `naruto` / `eva` / `yyh` / `slamdunk` | 选择视觉皮肤。 |
+| `style` | `plain` / `tech` / `pixel` / `op` / `rh` / `naruto` / `eva` / `yyh` / `slamdunk` / `soccer-hero` / `dragon-ball` | 选择视觉皮肤。 |
 | `intensity` | `subtle` / `medium` / `strong` | 装饰强度。不是所有皮肤都会用满三档。 |
-| `iconPack` | `default` / `op` / `naruto` / `eva` / `yyh` / `slamdunk` | 图标包。OP 风格可用 `op`，火影忍者风格可用 `naruto`，EVA 风格可用 `eva`，幽游白书风格可用 `yyh`，灌篮高手风格可用 `slamdunk`。 |
-| `canvasPattern` | `none` / `dots` / `map` / `circuit` / `confetti` / `hub` / `chakra` / `eva-grid` / `spirit-map` / `court` | 画布纹理倾向。 |
-| `nodeFrame` | `plain` / `glass` / `sticker` / `wanted` / `hub-card` / `shinobi-scroll` / `eva-panel` / `spirit-case` / `scoreboard-card` | 节点外框倾向。 |
+| `iconPack` | `default` / `op` / `naruto` / `eva` / `yyh` / `slamdunk` / `soccer` / `dragon-ball` | 图标包。OP 风格可用 `op`，火影忍者风格可用 `naruto`，EVA 风格可用 `eva`，幽游白书风格可用 `yyh`，灌篮高手风格可用 `slamdunk`，足球小将可用 `soccer`，七龙珠可用 `dragon-ball`。 |
+| `canvasPattern` | `none` / `dots` / `map` / `circuit` / `confetti` / `hub` / `chakra` / `eva-grid` / `spirit-map` / `court` / `pitch` / `dragon-radar` | 画布纹理倾向。 |
+| `nodeFrame` | `plain` / `glass` / `sticker` / `wanted` / `hub-card` / `shinobi-scroll` / `eva-panel` / `spirit-case` / `scoreboard-card` / `match-card` / `capsule-card` | 节点外框倾向。 |
 | `headerMark` | 任意短文本 | 标题装饰字，后端会截断到 40 字符。 |
 
 推荐组合：
@@ -251,6 +253,8 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 | 同步指挥 | `tech` | `eva` | `eva-grid` | `eva-panel` |
 | 灵界侦探 | `tech` | `yyh` | `spirit-map` | `spirit-case` |
 | 热血篮球馆 | `pixel` | `slamdunk` | `court` | `scoreboard-card` |
+| 绿茵热血 | `pixel` | `soccer-hero` | `pitch` | `match-card` |
+| 胶囊雷达 | `pixel` | `dragon-ball` | `dragon-radar` | `capsule-card` |
 
 ## 音乐规范
 
@@ -261,7 +265,7 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 | 字段 | 可选值或范围 | 说明 |
 |---|---|---|
 | `title` | 文本 | 音乐名。 |
-| `preset` | `tech-pulse` / `pixel-pop` / `grand-line-adventure` / `rh-pulse` / `shinobi-flame` / `eva-sync` / `spirit-gun` / `buzzer-beater` | 合成音乐预设或音乐气质。 |
+| `preset` | `tech-pulse` / `pixel-pop` / `grand-line-adventure` / `rh-pulse` / `shinobi-flame` / `eva-sync` / `spirit-gun` / `buzzer-beater` / `golden-goal` / `ki-burst` | 合成音乐预设或音乐气质。 |
 | `source` | `synth` / `url` / `upload` | 音乐来源。 |
 | `url` | `http(s)://...` 或 `data:audio/...` | 上传音乐会导出为 data URL。 |
 | `volume` | `0` 到 `0.5` | 默认不要太大，建议 `0.12` 到 `0.18`。 |
@@ -273,7 +277,7 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 ## 好看主题的制作流程
 
 1. 先写一句主题描述：例如“海风、旧纸地图、悬赏令、红蓝金”。
-2. 选一个基础视觉：`tech`、`pixel`、`op`、`rh`、`naruto`、`eva`、`yyh`、`slamdunk` 或 `plain`。
+2. 选一个基础视觉：`tech`、`pixel`、`op`、`rh`、`naruto`、`eva`、`yyh`、`slamdunk`、`soccer-hero`、`dragon-ball` 或 `plain`。
 3. 定义 3 个核心色：背景色、主强调色、副强调色。
 4. 定义文字颜色，先保证可读性。
 5. 定义节点背景和节点标题背景，让节点从画布里立起来。
@@ -310,7 +314,7 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 
 ## 代码贡献者：新增完整视觉皮肤
 
-如果你想新增一种真正的视觉风格，而不是只用现有 `plain/tech/pixel/op/rh/naruto/eva/yyh/slamdunk` 调色，需要改代码。
+如果你想新增一种真正的视觉风格，而不是只用现有 `plain/tech/pixel/op/rh/naruto/eva/yyh/slamdunk/soccer-hero/dragon-ball` 调色，需要改代码。
 
 至少需要同步这些位置：
 
@@ -333,6 +337,9 @@ SHIFT 划线断连也是主题的一部分。新增官方主题时，除了节�
 - 节点本体必须盖住主题水印，不能让装饰穿透到素材预览上方。
 - OP 风格这类强主题可以有明显元素，但仍要服务于创作效率。
 - 新增节点不要单独写死某个主题分支，优先使用 `--t8-*` 变量和通用 `t8-*` 类。
+- 主题连线动效必须走 scoped 规范：普通连线只做静态主题化；只有选中边、悬停边、或与选中节点相连的边才能加 `.t8-edge-theme-active` 并启用虚线流动、运动球、气功波等动画。
+- `.t8-edge-theme-active` 也必须受 `html[data-t8-edge-motion="reduced"]`、`.t8-viewport-moving`、`.t8-node-dragging` 和 `prefers-reduced-motion` 控制；拖动画布、拖节点、系统减少动态效果时不得继续播放 `animateMotion`、filter 或无限动画。
+- 如果一次选中导致大量连线同时满足条件，应按 `DeletableEdge.tsx` 的 `DECORATIVE_EDGE_MOTION_LIMIT` 降级，只保留直接选中/悬停边的动效，不允许 36+ 条边一起跑。
 
 ## 最小模板示例
 

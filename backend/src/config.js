@@ -26,7 +26,7 @@ const config = {
   // 服务器
   HOST: process.env.HOST || '127.0.0.1',
   PORT: process.env.PORT || 18766, // 注意:与主项目 18765 错开
-  APP_VERSION: '1.9.7',
+  APP_VERSION: '2.1.4',
   NODE_ENV: process.env.NODE_ENV || (IS_PACKAGED ? 'production' : 'development'),
   IS_PACKAGED,
 
@@ -42,11 +42,11 @@ const config = {
   // 数据文件
   CANVAS_FILE: path.join(DATA_ROOT, 'data', 'canvas_list.json'),
   SETTINGS_FILE: path.join(DATA_ROOT, 'data', 'settings.json'),
+  ACHIEVEMENTS_FILE: path.join(DATA_ROOT, 'data', 'achievements.json'),
   RH_APPS_FILE: path.join(DATA_ROOT, 'data', 'rh_apps.json'),
   // v1.2.10+ RH 工具节点专用数据（与 rh_apps.json 完全分开）
   RH_TOOL_CATEGORIES_FILE: path.join(DATA_ROOT, 'data', 'rh_tool_categories.json'),
   RH_TOOL_APPS_FILE: path.join(DATA_ROOT, 'data', 'rh_tool_apps.json'),
-
   // 前端静态产物目录(打包后由 Express 同进程托管)
   FRONTEND_DIST: process.env.T8PC_FRONTEND_DIST || (IS_PACKAGED ? '' : path.join(PROJECT_DIR, 'dist')),
 
@@ -55,7 +55,7 @@ const config = {
   THUMBNAIL_QUALITY: 80,
 
   // 业务配置
-  MAX_FILE_SIZE: 10 * 1024 * 1024,
+  MAX_FILE_SIZE: 20 * 1024 * 1024,
 
   // 三套 API Key 默认值(均可在 settings 中覆盖)
   // 贞贞工坊 / LLM 独立 Key 强制走 https://ai.t8star.org
